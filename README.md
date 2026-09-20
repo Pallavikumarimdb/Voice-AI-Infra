@@ -88,7 +88,7 @@ End-to-end real-time Japanese ↔ English speech-to-text and machine translation
 
 ## 3. Protocol Specification
 
-### Client ↔ Gateway Binary Audio Frame
+### 3.1 Client ↔ Gateway Binary Audio Frame
 ```
 Offset    Type       Field        Description
 0         uint8      msgType      0x01 = audio
@@ -97,43 +97,13 @@ Offset    Type       Field        Description
 13..      int16LE[]  pcm          16kHz 16-bit mono signed PCM samples
 ```
 
-### Shared Package (`@voice/protocol`)
-Both `client` and `gateway` import protocol contracts directly from `@voice/protocol`:
+### 3.2 Shared Package (`@voice/protocol`)
+Both `client` and `gateway` import protocol contracts directly from the workspace package:
 ```typescript
-import { packAudioFrame, GatewayMessage, Utterance } from '@voice/protocol';
+import { packAudioFrame, unpackAudioFrame, GatewayMessage, Utterance } from '@voice/protocol';
 ```
 
----
-
-## 4. Single-Command Startup & Quickstart
-
-### Option A: Turborepo Local Development (Single Command)
-Run the entire pipeline (Client, Gateway, and Services) concurrently with unified terminal output:
-```bash
-# 1. Install root dependencies and link workspaces
-npm install
-
-# 2. Build shared packages and apps
-npm run build
-
-# 3. Start all pipeline components simultaneously
-npm run dev
-```
-
-### Option B: Docker Compose (GPU Box & Production Standard)
-Runs all services with exact CUDA runtimes, Prometheus, and Grafana:
-```bash
-npm run dev:docker
-# or: docker compose up --build
-```
-- Gateway: `http://localhost:8443` (WS endpoint: `ws://localhost:8443/session`)
-- Client Web App: `http://localhost:5173`
-- STT Service: `http://localhost:8001`
-- MT Service: `http://localhost:8002`
-- Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3000` (User: `admin`, Pass: `admin`)
-
-### JSON Control & Telemetry Messages
+### 3.3 JSON Control & Telemetry Messages
 - **Client → Gateway (`start`)**:
   ```json
   { "type": "start", "srcLang": "ja", "tgtLang": "en", "sampleRate": 16000 }
@@ -172,20 +142,41 @@ npm run dev:docker
     "tTranslated": 1700000001150
   }
   ```
+- **Gateway → Client (`hud`)**:
+  ```json
+  {
+    "type": "hud",
+    "queueDepth": 1024,
+    "gpuUtil": 68,
+    "rtf": 0.32
+  }
+  ```
 
 ---
 
-## 4. Quickstart & Running the Stack
+## 4. Single-Command Startup & Quickstart
 
-### Option A: Running with Docker Compose (Recommended for Full Stack)
+### Option A: Turborepo Local Development (Single Command)
+Run the entire pipeline (Client, Gateway, and Services) concurrently with unified terminal output:
 ```bash
-# 1. Copy environment template
-cp .env.example .env
+# 1. Install root dependencies and link workspaces
+npm install
 
-# 2. Launch all services, Prometheus, and Grafana
-docker compose up --build
+# 2. Build shared packages and apps
+npm run build
+
+# 3. Start all pipeline components simultaneously
+npm run dev
 ```
-- Gateway: `http://localhost:8443` (WS endpoint `ws://localhost:8443/session`)
+
+### Option B: Docker Compose (GPU Box & Production Standard)
+Runs all services with exact CUDA runtimes, Prometheus, and Grafana:
+```bash
+npm run dev:docker
+# or: docker compose up --build
+```
+- Gateway: `http://localhost:8443` (WS endpoint: `ws://localhost:8443/session`)
+- Client Web App: `http://localhost:5173`
 - STT Service: `http://localhost:8001`
 - MT Service: `http://localhost:8002`
 - Prometheus: `http://localhost:9090`
@@ -193,7 +184,7 @@ docker compose up --build
 
 ---
 
-### Option B: Running Individual Services for Development
+### Option C: Running Standalone Services (Individual Terminals)
 
 #### 1. Start the Gateway (Node.js)
 ```bash
@@ -208,7 +199,7 @@ cd services/stt
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8001
+uvicorn main:app --host 0.0.0.0 --port 8001 --reload
 ```
 
 #### 3. Start the MT Service (Python)
@@ -217,7 +208,7 @@ cd services/mt
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8002
+uvicorn main:app --host 0.0.0.0 --port 8002 --reload
 ```
 
 #### 4. Run the Client Browser Test App
@@ -235,13 +226,14 @@ Open `http://localhost:5173` to test live microphone capture, real-time stabiliz
 The evaluation harness evaluates streaming latency, flicker rate, ASR accuracy (CER/WER), translation metrics (chrF/BLEU), and GPU throughput.
 
 ```bash
+# 1. Install eval dependencies
 cd eval
 pip install -r requirements.txt
 
-# Run parameter sweep across chunk sizes, agreement-n, and models:
+# 2. Run parameter sweep across chunk sizes, agreement-n, and models:
 python runner.py --sweep configs/streaming_ablation.yaml
 
-# Generate the Latency vs Flicker Pareto Frontier chart:
+# 3. Generate the Latency vs Flicker Pareto Frontier chart:
 python report.py --input results/streaming_ablation.csv --output results/pareto_chart.png
 ```
 
