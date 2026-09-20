@@ -1,0 +1,10 @@
+{
+  "name": "voice-mt-service",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "uvicorn main:app --host 0.0.0.0 --port 8002 --reload",
+    "start": "uvicorn main:app --host 0.0.0.0 --port 8002",
+    "build": "echo MT service ready"
+  }
+}

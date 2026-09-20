@@ -1,0 +1,23 @@
+{
+  "name": "voice-ai-infra-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Polyglot Turborepo for Streaming Voice Translation Pipeline",
+  "workspaces": [
+    "packages/*",
+    "client",
+    "gateway",
+    "services/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "dev:docker": "docker compose up --build",
+    "eval:sweep": "python eval/runner.py --sweep eval/configs/streaming_ablation.yaml"
+  },
+  "devDependencies": {
+    "turbo": "^1.12.5",
+    "typescript": "^5.3.3"
+  }
+}

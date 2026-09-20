@@ -1,0 +1,15 @@
+# Streaming ASR & Stabilizer Ablation Config
+sweep:
+  chunk_ms: [250, 500, 1000, 2000]
+  agreement_n: [1, 2, 3]
+  model: ["small", "large-v3-turbo"]
+
+dataset: datasets/covost2_ja_en_sample.jsonl
+
+metrics:
+  - asr.cer
+  - streaming.flicker_rate
+  - streaming.first_partial_ms
+  - streaming.finalize_ms
+
+output: results/streaming_ablation.csv

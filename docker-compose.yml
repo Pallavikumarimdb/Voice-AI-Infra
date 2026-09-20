@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: voice-gateway
+    ports:
+      - "8443:8443"
+    environment:
+      - PORT=8443
+      - HOST=0.0.0.0
+      - STT_SERVICE_URL=ws://stt-service:8001/stream
+      - MT_SERVICE_URL=http://mt-service:8002/translate
+      - MAX_BUFFERED_BYTES=65536
+    depends_on:
+      - stt-service
+      - mt-service
+    networks:
+      - voice-net
+    restart: unless-stopped
+
+  stt-service:
+    build:
+      context: ./services/stt
+      dockerfile: Dockerfile
+    container_name: voice-stt
+    ports:
+      - "8001:8001"
+    environment:
+      - STT_HOST=0.0.0.0
+      - STT_PORT=8001
+      - STT_MODEL_SIZE=large-v3-turbo
+      - STT_DEVICE=cuda
+      - STT_COMPUTE_TYPE=float16
+      - LOCAL_AGREEMENT_N=2
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - voice-net
+    restart: unless-stopped
+
+  mt-service:
+    build:
+      context: ./services/mt
+      dockerfile: Dockerfile
+    container_name: voice-mt
+    ports:
+      - "8002:8002"
+    environment:
+      - MT_HOST=0.0.0.0
+      - MT_PORT=8002
+      - MT_MODEL=Qwen/Qwen2.5-7B-Instruct
+      - MT_GPU_MEMORY_UTILIZATION=0.85
+      - MT_MAX_NUM_SEQS=64
+      - MT_DTYPE=float16
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - voice-net
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    container_name: voice-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - voice-net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.3.3
+    container_name: voice-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - voice-net
+    restart: unless-stopped
+
+networks:
+  voice-net:
+    driver: bridge

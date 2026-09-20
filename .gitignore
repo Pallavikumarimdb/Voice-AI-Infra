@@ -1,0 +1,47 @@
+# Node.js
+node_modules/
+dist/
+build/
+.npm/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyTorch / Models / Caches
+.cache/
+huggingface/
+checkpoints/
+*.pt
+*.bin
+*.onnx
+
+# Data & Eval artifacts
+eval/results/*.csv
+eval/results/*.png
+eval/results/*.json
+*.jsonl
+!eval/datasets/*.jsonl
+
+# Logs & Metrics
+logs/
+*.log
+*.sqlite
+
+# Environment & OS
+.env
+.env.local
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

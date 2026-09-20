@@ -1,0 +1,4 @@
+{"id": 1, "audio_path": "sample_1.wav", "lang": "ja", "reference_text": "すみません、駅はどこですか", "reference_translation": "Excuse me, where is the station?"}
+{"id": 2, "audio_path": "sample_2.wav", "lang": "ja", "reference_text": "東京行きの新幹線は何番線ですか", "reference_translation": "Which platform is the bullet train for Tokyo?"}
+{"id": 3, "audio_path": "sample_3.wav", "lang": "ja", "reference_text": "切符はどこで買えますか", "reference_translation": "Where can I buy a ticket?"}
+{"id": 4, "audio_path": "sample_4.wav", "lang": "ja", "reference_text": "この電車は新宿に止まりますか", "reference_translation": "Does this train stop at Shinjuku?"}

@@ -1,0 +1,112 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "title": "Active Sessions",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "active_sessions",
+          "legendFormat": "Sessions"
+        }
+      ]
+    },
+    {
+      "title": "Dropped Frames (Backpressure)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(gateway_audio_dropped_frames_total[1m]))",
+          "legendFormat": "Dropped/sec"
+        }
+      ]
+    },
+    {
+      "title": "Gateway Queue Depth",
+      "type": "timeseries",
+      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "gateway_queue_depth",
+          "legendFormat": "Stage: {{stage}}"
+        }
+      ]
+    },
+    {
+      "title": "End-to-End Latency Quantiles (p50, p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(e2e_latency_seconds_bucket[1m])) by (le, boundary))",
+          "legendFormat": "{{boundary}} (p50)"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(e2e_latency_seconds_bucket[1m])) by (le, boundary))",
+          "legendFormat": "{{boundary}} (p95)"
+        }
+      ]
+    },
+    {
+      "title": "STT ASR Chunk Inference Duration",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.90, sum(rate(stt_asr_duration_seconds_bucket[1m])) by (le, chunk_ms))",
+          "legendFormat": "Chunk {{chunk_ms}}ms (p90)"
+        }
+      ]
+    },
+    {
+      "title": "MT TTFT & Decode Duration",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(mt_ttft_seconds_bucket[1m])) by (le))",
+          "legendFormat": "TTFT (p50)"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(mt_ttft_seconds_bucket[1m])) by (le))",
+          "legendFormat": "TTFT (p95)"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(mt_decode_seconds_bucket[1m])) by (le))",
+          "legendFormat": "Decode (p50)"
+        }
+      ]
+    },
+    {
+      "title": "MT HTTP Request Duration (Gateway Perspective)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(mt_request_duration_seconds_bucket[1m])) by (le))",
+          "legendFormat": "Gateway->MT Wall Time (p95)"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["voice-ai", "streaming", "translation"],
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "title": "Streaming Voice Translation Pipeline - Realtime Telemetry",
+  "uid": "voice-translation-pipeline"
+}
