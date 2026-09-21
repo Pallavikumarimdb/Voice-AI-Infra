@@ -34,127 +34,139 @@ End-to-end real-time Japanese ↔ English speech-to-text and machine translation
 
 ---
 
-## 2. Repository Layout (Turborepo Polyglot Monorepo)
+## 2. Repository Layout & Section Documentation
+
+Each component contains its own dedicated `README.md` explaining its internals, configuration, and interfaces:
 
 ```
 .
+├── packages/
+│   └── protocol/               # 📖 packages/protocol/README.md: Wire specs & binary packers
+├── client/                     # 📖 client/README.md: AudioWorklet & non-flicker captions UI
+├── gateway/                    # 📖 gateway/README.md: Backpressure router & session coordinator
+├── services/
+│   ├── stt/                    # 📖 services/stt/README.md: VAD segmenter & LocalAgreement-n ASR
+│   ├── mt/                     # 📖 services/mt/README.md: vLLM AsyncLLMEngine continuous batching
+│   ├── tts/                    # Streaming speech synthesis skeleton (optional)
+│   └── diarization/            # Diarization skeleton (optional)
+├── eval/                       # 📖 eval/README.md: Pure-function benchmark suite & Pareto charts
+├── observability/              # 📖 observability/README.md: Prometheus metrics & Grafana dashboard
 ├── turbo.json                  # Turborepo task pipeline (dev, build, lint)
 ├── package.json                # Root workspace configuration
-├── packages/
-│   └── protocol/               # Shared TypeScript protocol & binary framing (@voice/protocol)
-├── client/                     # Lightweight browser audio capture & HUD (TS, Vite)
-│   ├── src/
-│   │   ├── audio/              # AudioWorklet (no-alloc process loop), ring buffer, resampler
-│   │   ├── session/            # SessionManager state machine
-│   │   └── ui/                 # React Captions & LatencyHUD components
-│   └── package.json
-├── gateway/                    # Edge WebSocket router & backpressure controller (Node/TS)
-│   ├── src/
-│   │   ├── server.ts           # WebSocket & HTTP metrics server (:8443)
-│   │   ├── Session.ts          # Session tracking & rolling context window
-│   │   ├── backpressure.ts     # Drop-oldest bufferedAmount backpressure policy
-│   │   ├── metrics.ts          # Prometheus instrumentation
-│   │   └── routes/             # STT WS client & MT HTTP client
-│   └── package.json
-├── services/
-│   ├── stt/                    # Streaming ASR & segmentation (Python, FastAPI)
-│   │   ├── vad.py              # Silero VAD wrapper (threshold = 0.5)
-│   │   ├── segmenter.py        # Hangover (500ms), preroll (200ms), maxLen (18s) state machine
-│   │   ├── stabilizer.py       # LocalAgreement-n streaming text stabilizer
-│   │   ├── asr.py              # faster-whisper with anti-hallucination settings
-│   │   ├── session_state.py    # Per-session audio ring buffer & utterance state
-│   │   ├── main.py             # WebSocket /stream endpoint
-│   │   └── package.json        # Turborepo integration
-│   ├── mt/                     # Machine translation service (Python, FastAPI, vLLM)
-│   │   ├── engine.py           # vLLM AsyncLLMEngine wrapper with dev fallback
-│   │   ├── prompt.py           # Terse translation system contract
-│   │   ├── main.py             # Stateless POST /translate
-│   │   └── package.json        # Turborepo integration
-│   ├── tts/                    # Optional streaming speech synthesis skeleton
-│   └── diarization/            # Optional speaker diarization skeleton
-├── eval/                       # Offline benchmark & ablation harness
-│   ├── configs/                # Sweep definitions (*.yaml)
-│   ├── datasets/               # CoVoST 2 / Common Voice datasets (*.jsonl)
-│   ├── metrics/                # Pure-function metrics: asr, streaming, mt, serving
-│   ├── runner.py               # Dataset replay runner
-│   └── report.py               # Latency vs quality Pareto chart generator
-├── observability/
-│   ├── prometheus.yml          # Prometheus scrape config
-│   └── grafana/dashboards/     # Real-time pipeline telemetry dashboard
-└── docker-compose.yml          # Containerized multi-service stack
+└── docker-compose.yml          # Multi-container GPU stack orchestration
 ```
 
 ---
 
-## 3. Protocol Specification
+## 3. How Components Connect to Each Other
 
-### 3.1 Client ↔ Gateway Binary Audio Frame
+### 3.1 End-to-End Component Connectivity Matrix
+
 ```
-Offset    Type       Field        Description
-0         uint8      msgType      0x01 = audio
-1..4      uint32LE   seq          Monotonically increasing sequence number
-5..12     float64LE  tCapture     Client-side timestamp (Date.now() in ms)
-13..      int16LE[]  pcm          16kHz 16-bit mono signed PCM samples
+┌──────────────┐             ┌──────────────┐             ┌──────────────┐
+│    Client    ├────────────►│   Gateway    ├────────────►│  STT Service │
+│   (Browser)  │  WSS :8443  │ (Node.js/TS) │   WS :8001  │ (Python/Fast)│
+└──────┬───────┘             └──────┬───────┘             └──────┬───────┘
+       ▲                            │                            │
+       │     Emits Partial/Final    │      HTTP POST :8002       │
+       │     & Translated JSON      ▼      (Stateless)           │
+       └────────────────────────────┴───────────────────────────►│  MT Service │
+                                                                 │ (vLLM Engine)│
+                                                                 └──────────────┘
 ```
 
-### 3.2 Shared Package (`@voice/protocol`)
-Both `client` and `gateway` import protocol contracts directly from the workspace package:
-```typescript
-import { packAudioFrame, unpackAudioFrame, GatewayMessage, Utterance } from '@voice/protocol';
-```
-
-### 3.3 JSON Control & Telemetry Messages
-- **Client → Gateway (`start`)**:
-  ```json
-  { "type": "start", "srcLang": "ja", "tgtLang": "en", "sampleRate": 16000 }
-  ```
-- **Gateway → Client (`partial`)**:
-  ```json
-  {
-    "type": "partial",
-    "uttId": 7,
-    "seq": 31,
-    "text": "すみません、駅は",
-    "stableChars": 6,
-    "tCapture": 1700000000120,
-    "tEmit": 1700000000450
-  }
-  ```
-- **Gateway → Client (`final`)**:
-  ```json
-  {
-    "type": "final",
-    "uttId": 7,
-    "text": "すみません、駅はどこですか",
-    "words": [{"text": "すみません", "start": 0.0, "end": 0.62}],
-    "tCapture": 1700000000120,
-    "tFinal": 1700000000850
-  }
-  ```
-- **Gateway → Client (`translated`)**:
-  ```json
-  {
-    "type": "translated",
-    "uttId": 7,
-    "translation": "Excuse me, where is the station?",
-    "ttftMs": 84.2,
-    "decodeMs": 195.4,
-    "tTranslated": 1700000001150
-  }
-  ```
-- **Gateway → Client (`hud`)**:
-  ```json
-  {
-    "type": "hud",
-    "queueDepth": 1024,
-    "gpuUtil": 68,
-    "rtf": 0.32
-  }
-  ```
+| Source | Target | Protocol | Data Exchanged | Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| **Client** | **Gateway** | `wss://:8443/session` | Binary PCM frames (`0x01` + `seq` + `tCapture` + PCM) & JSON control (`start`, `stop`) | Low-overhead microphone audio ingestion and bidirectional telemetry |
+| **Gateway** | **STT Service** | `ws://:8001/stream` | Passthrough binary PCM frames & session initialization JSON | Persistent, stateful audio streaming to VAD and streaming ASR |
+| **STT Service**| **Gateway** | WebSocket | JSON: `{type: "partial", ...}` and `{type: "final", ...}` | Streaming partial hypotheses and committed acoustic segments |
+| **Gateway** | **MT Service** | `http://:8002/translate`| JSON: `{uttId, text, srcLang, tgtLang, context: [...]}` | Stateless translation request batched by vLLM scheduler |
+| **MT Service** | **Gateway** | HTTP Response | JSON: `{translation, ttft_ms, decode_ms, tokensOut}` | High-speed translated output with token generation timing |
+| **Gateway** | **Client** | WebSocket | JSON: `{type: "translated", ...}` and `{type: "hud", ...}` | Live translated captions and real-time latency HUD telemetry |
+| **Prometheus** | **All Services** | HTTP `GET /metrics` | Time-series metric scrapes every 2s (:8443, :8001, :8002) | Pipeline telemetry, queue depth, and stage-boundary histograms |
+| **Grafana** | **Prometheus** | HTTP `GET :9090` | PromQL queries | Visualizing real-time latency quantiles, backpressure, and throughput |
 
 ---
 
-## 4. Single-Command Startup & Quickstart
+### 3.2 Step-by-Step Data Flow for a Single Utterance
+
+```
+Client               Gateway            STT Service          MT Service
+  │                     │                    │                    │
+  │─── start JSON ─────►│                    │                    │
+  │                     │── session_start ──►│                    │
+  │                     │                    │                    │
+  │── binary PCM frame ─►│                    │                    │
+  │   (seq, tCapture)   │── forward frame ──►│                    │
+  │                     │   (backpressure)   │                    │
+  │                     │                    │── VAD gates chunk  │
+  │                     │                    │── LocalAgreement-n │
+  │                     │◄── partial JSON ───│                    │
+  │◄── partial JSON ────│                    │                    │
+  │   (grey text diff)  │                    │                    │
+  │                     │                    │── silence hangover │
+  │                     │◄── final JSON ─────│   (commit segment) │
+  │◄── final JSON ──────│   (words + times)  │                    │
+  │   (solid text)      │                                         │
+  │                     │─── POST /translate (text + context) ───►│
+  │                     │                                         │── vLLM dynamic
+  │                     │                                         │   batching
+  │                     │◄── 200 OK (translation + ttft_ms) ──────│
+  │◄── translated JSON ─│                                         │
+  │   (blue text)       │                                         │
+```
+
+1. **User Speaks**: Browser `AudioWorklet` slices audio into 512-sample Int16 blocks and transmits binary frames with client capture timestamps (`tCapture`) over WebSocket.
+2. **Gateway Ingestion & Backpressure**: Gateway checks `session.sttWs.bufferedAmount`. If the STT service is healthy, the frame is forwarded. If overloaded (`> 64KB`), the frame is dropped to prevent runaway lag.
+3. **VAD Gating & Chunk Accumulation**: In `services/stt`, Silero VAD evaluates speech probability (`prob > 0.5`). If speech is detected, the audio segmenter captures a 200ms preroll and feeds the active audio buffer.
+4. **Streaming Partials & Stabilization**: Every 500ms, faster-whisper generates a hypothesis. `LocalAgreement-n` finds the longest common prefix across the last `n` runs. Stable text is committed, audio buffer is trimmed, and speculative text is emitted as `partial`.
+5. **Silence Hangover & Utterance Finalization**: When the speaker pauses for $\ge 500\text{ms}$ (or speech reaches 18s), the segment is finalized. Word timestamps are generated, and a `final` event is sent to the Gateway.
+6. **Stateless GPU Translation**: Gateway receives `final`, updates its 3-sentence rolling context window, and fires an async `POST /translate` to the MT service.
+7. **Continuous Batching in vLLM**: `AsyncLLMEngine` batches the translation request alongside other active sessions at the iteration level, returning the translation with sub-250ms TTFT.
+8. **Client Caption Render**: Gateway pushes `{type: "translated"}` to the browser, which renders the translation underneath the finalized sentence without remounting the DOM.
+
+---
+
+## 4. Section Breakdown: What Each Section Does
+
+### 4.1 Shared Protocol (`packages/protocol/`)
+* **Role**: Defines the shared wire format and TypeScript types for the entire repository.
+* **Key Artifacts**: `packAudioFrame`, `unpackAudioFrame`, `GatewayMessage`, `Utterance`, `WordTs`.
+* **Details**: See [packages/protocol/README.md](packages/protocol/README.md).
+
+### 4.2 Browser Client (`client/`)
+* **Role**: Captures microphone audio on a dedicated audio thread, streams binary frames, and displays non-flickering captions and live telemetry HUD.
+* **Key Artifacts**: `AudioWorkletProcessor`, `SessionManager`, `Captions.tsx`, `LatencyHUD.tsx`.
+* **Details**: See [client/README.md](client/README.md).
+
+### 4.3 Gateway Service (`gateway/`)
+* **Role**: Edge WebSocket termination, session context window management, drop-oldest backpressure control, and async MT dispatch.
+* **Key Artifacts**: `server.ts`, `Session.ts`, `backpressure.ts`, `sttClient.ts`, `mtClient.ts`, `metrics.ts`.
+* **Details**: See [gateway/README.md](gateway/README.md).
+
+### 4.4 Streaming STT Service (`services/stt/`)
+* **Role**: Silero VAD speech gating, acoustic segmentation state machine, LocalAgreement-n streaming text stabilization, and faster-whisper ASR inference.
+* **Key Artifacts**: `main.py`, `vad.py`, `segmenter.py`, `stabilizer.py`, `asr.py`, `session_state.py`.
+* **Details**: See [services/stt/README.md](services/stt/README.md).
+
+### 4.5 Machine Translation Service (`services/mt/`)
+* **Role**: Stateless GPU translation utilizing vLLM `AsyncLLMEngine` continuous batching, concise system prompts, and TTFT tracking.
+* **Key Artifacts**: `main.py`, `engine.py`, `prompt.py`.
+* **Details**: See [services/mt/README.md](services/mt/README.md).
+
+### 4.6 Offline Evaluation Harness (`eval/`)
+* **Role**: Reproducible benchmark suite implementing pure-function metric contracts (CER, WER, flicker rate, chrF, BLEU) and ablation parameter sweeps.
+* **Key Artifacts**: `runner.py`, `report.py`, `metrics/`, `configs/streaming_ablation.yaml`.
+* **Details**: See [eval/README.md](eval/README.md).
+
+### 4.7 Observability Stack (`observability/`)
+* **Role**: Real-time monitoring with Prometheus scrapers and a comprehensive 7-panel Grafana dashboard.
+* **Key Artifacts**: `prometheus.yml`, `voice_translation_pipeline.json`.
+* **Details**: See [observability/README.md](observability/README.md).
+
+---
+
+## 5. Single-Command Startup & Quickstart
 
 ### Option A: Turborepo Local Development (Single Command)
 Run the entire pipeline (Client, Gateway, and Services) concurrently with unified terminal output:
@@ -221,9 +233,7 @@ Open `http://localhost:5173` to test live microphone capture, real-time stabiliz
 
 ---
 
-## 5. Offline Evaluation Harness
-
-The evaluation harness evaluates streaming latency, flicker rate, ASR accuracy (CER/WER), translation metrics (chrF/BLEU), and GPU throughput.
+## 6. Offline Evaluation Harness Usage
 
 ```bash
 # 1. Install eval dependencies
@@ -237,17 +247,9 @@ python runner.py --sweep configs/streaming_ablation.yaml
 python report.py --input results/streaming_ablation.csv --output results/pareto_chart.png
 ```
 
-### Pure Function Metric Contracts
-All metric functions in `eval/metrics/` follow a stateless contract:
-```python
-def compute(log: list[dict], reference: Any = None) -> dict[str, float]:
-    ...
-```
-No metric touches disk, networks, or GPUs.
-
 ---
 
-## 6. Observability & Key Metrics
+## 7. Observability & Key Metrics
 
 Prometheus scrapes metrics from all components:
 - `gateway_audio_dropped_frames_total`: Audio frames dropped due to `ws.bufferedAmount` backpressure.
