@@ -25,12 +25,14 @@ export function createSTTConnection(
   const ws = new WebSocket(sttServiceUrl);
 
   ws.on('open', () => {
-    // Send session init handshake
+    // Send session init handshake. uttIdStart continues numbering across
+    // mid-call reconnects so transcripts don't merge unrelated turns.
     const initMsg = {
       type: 'session_start',
       sessionId: session.id,
       srcLang: session.srcLang,
       sampleRate: session.sampleRate,
+      startUttId: (session.lastSttUttId || 0) + 1,
     };
     ws.send(JSON.stringify(initMsg));
   });

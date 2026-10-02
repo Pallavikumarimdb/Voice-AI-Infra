@@ -20,7 +20,11 @@ export interface Session {
   currentSpeakingUttId?: number;
   currentTTSAbort?: AbortController;
   config?: Record<string, any>;
-}
+  /** Last agent utterance text + when its playback ended (echo suppression). */
+  lastAgentText?: string;
+  lastAgentSpeechEndAt?: number;
+  /** Highest STT uttId seen (survives STT reconnects so numbering continues). */
+  lastSttUttId?: number;
 
 export class SessionManager {
   private sessions = new Map<string, Session>();

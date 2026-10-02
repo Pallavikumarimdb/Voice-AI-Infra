@@ -5,10 +5,84 @@ Seamlessly configured via UI instructions, domain presets, and language selectio
 """
 
 import time
+import re
 from typing import Dict, Any, Optional, List
 from .state import CallState
 from .audit import AuditLogger
 from .compliance.guard import ComplianceGuard
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Intent helpers: the template brain must react to what the caller actually
+# said — never declare verification, promises, or qualification unprompted.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_MONTHS_EN = (
+    "january|february|march|april|may|june|july|august|september|october|november|december"
+    "|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec"
+)
+
+_NEGATIVE_EN = ("no", "not", "don't", "dont", "can't", "cant", "cannot", "won't", "never",
+                "stop", "wrong", "unable", "hard", "difficult", "struggling", "refuse")
+_AGREE_EN = ("yes", "yeah", "yep", "sure", "okay", "ok", "agree", "i will", "i'll pay",
+             "i can pay", "schedule", "arrange", "today", "tomorrow", "sounds good",
+             "that works", "correct", "that's right", "will do")
+_HARDSHIP_EN = ("hard", "difficult", "struggling", "can't afford", "cannot afford",
+                "lost job", "unemployed", "medical", "behind", "tough month",
+                "tight", "short on", "broke")
+
+_NEGATIVE_JA = ("いいえ", "いや", "無理", "できない", "払えない", "厳しい", "ないです",
+                "ありません", "やめて", "違います", "人違い", "だめ",
+                "muri", "haraenai", "dekimasen", "chigaimasu", "hitochigai")
+_AGREE_JA = ("はい", "ええ", "お願いします", "大丈夫", "結構です", "支払います",
+             "払います", "わかりました", "分かりました", "いいです", "お願い",
+             "onegai", "wakarimashita", "wakarimashita", "hai", "daijoubu",
+             "shiharai", "haraimasu", "yakusoku")
+_HARDSHIP_JA = ("厳しい", "難しい", "困って", "失業", "病気", "払えない", "今月は",
+                "kibishii", "muzukashii", "komatte", "haraenai", "kongetsu")
+
+
+def _heard_date(text: str, language: str) -> bool:
+    t = text.lower()
+    if language == "ja":
+        if re.search(r"[0-9０-９]{2,4}年|\d{1,2}月|\d{1,2}日|生まれ|誕生", text):
+            return True
+        # Romaji dates from speech recognition ("1985 nen 4 gatsu 12 nichi").
+        return bool(re.search(r"\d+\s*(nen|gatsu|nichi)|tanjoubi|umare|seinen gappi", t))
+    return bool(re.search(
+        rf"\b({_MONTHS_EN})\b|\b(19|20)\d{{2}}\b|\b\d{{1,2}}[/-]\d{{1,2}}([/-]\d{{2,4}})?\b"
+        r"|\bborn\b|\bbirth\b|\bdob\b",
+        t,
+    ))
+
+
+def _heard_credential(text: str, language: str) -> bool:
+    """Date of birth or a digit run (PIN / phone tail) for KYC-style checks."""
+    if _heard_date(text, language):
+        return True
+    digits = re.sub(r"\D", "", text)
+    if language == "ja":
+        return len(digits) >= 4 or bool(re.search(r"番号|暗証|生まれ", text))
+    return len(digits) >= 4 or bool(re.search(r"\b(pin|code|number|phone)\b", text.lower()))
+
+
+def _agrees(text: str, language: str) -> bool:
+    t = text.lower()
+    neg = _NEGATIVE_JA if language == "ja" else _NEGATIVE_EN
+    pos = _AGREE_JA if language == "ja" else _AGREE_EN
+    if any(n in t for n in neg):
+        return False
+    return any(p in t for p in pos)
+
+
+def _hardship(text: str, language: str) -> bool:
+    t = text.lower()
+    words = _HARDSHIP_JA if language == "ja" else _HARDSHIP_EN
+    return any(w in t for w in words)
+
+
+def _quote(text: str, limit: int = 60) -> str:
+    t = " ".join(text.split())
+    return t if len(t) <= limit else t[:limit].rstrip() + "…"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Per-language response templates
@@ -164,6 +238,12 @@ class GeneralizedVoiceAgent:
         state["domain"] = domain
         state["language"] = language
 
+        # Conversation history: every turn is recorded so replies can reference
+        # what was actually said (and any future LLM path inherits full context).
+        history = state.get("messages", [])
+        history.append({"role": "user", "content": user_text})
+        state["messages"] = history[-20:]
+
         events: List[Dict[str, Any]] = []
 
         if audit_logger:
@@ -189,6 +269,10 @@ class GeneralizedVoiceAgent:
         reply_text, turn_events = handler(ctx)
         handler_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
         events.extend(turn_events)
+
+        history = state.get("messages", [])
+        history.append({"role": "assistant", "content": reply_text})
+        state["messages"] = history[-20:]
 
         if audit_logger:
             audit_logger.append("agent_utterance", {
@@ -234,11 +318,29 @@ class GeneralizedVoiceAgent:
         elif ctx.turn == 2:
             ctx.state["stage"] = "compensation_and_work_style"
             ctx.state["tech_stack_noted"] = True
-            reply = tmpl[2]()
+            quoted = _quote(ctx.user_text, 80)
+            if ctx.language == "ja":
+                reply = (
+                    f"ご経験について「{quoted}」とお聞かせいただきありがとうございます。"
+                    f"続いて、勤務形態のご希望（フルリモートやハイブリッドなど）と、ご希望の年収レンジについてお聞かせいただけますでしょうか。"
+                )
+            else:
+                reply = (
+                    f"Thanks for sharing that — noted your background in \"{quoted}\". "
+                    f"Moving on, could you tell me about your preferred working arrangement (fully remote, hybrid, or on-site) "
+                    f"and your expected compensation range?"
+                )
             events.append({"type": "state_change", "payload": {"stage": "compensation_and_work_style", "domain": "screening"}, "ts": int(time.time() * 1000)})
             return reply, events
 
         elif ctx.turn == 3:
+            # Don't declare a qualification on an empty or content-free answer.
+            if len(ctx.user_text.strip()) < 3:
+                if ctx.language == "ja":
+                    reply = "恐れ入ります。ご希望条件について、もう少し詳しくお聞かせいただけますでしょうか。"
+                else:
+                    reply = "Sorry, I didn't catch that — could you share a bit more detail about your expectations?"
+                return reply, events
             ctx.state["stage"] = "closing"
             ctx.state["qualified"] = True
             ctx.state["compensation_fit"] = True
@@ -260,6 +362,7 @@ class GeneralizedVoiceAgent:
         tmpl = _KYC_TEMPLATES.get(ctx.language, _KYC_TEMPLATES["en"])
         events = []
         user_lower = ctx.user_text.lower()
+        ja = ctx.language == "ja"
 
         if ctx.turn == 1:
             ctx.state["stage"] = "identity_verification"
@@ -282,6 +385,29 @@ class GeneralizedVoiceAgent:
                 events.append({"type": "end_call", "payload": {"status": "auth_failed"}, "ts": int(time.time() * 1000)})
                 return reply, events
 
+            if not _heard_credential(ctx.user_text, ctx.language):
+                # No credential-like content heard: re-ask instead of passing.
+                attempts = int(ctx.state.get("verification_attempts", 0)) + 1
+                ctx.state["verification_attempts"] = attempts
+                if attempts >= 2:
+                    ctx.state["identity_verified"] = False
+                    ctx.state["stage"] = "auth_failed"
+                    reply = (
+                        "恐れ入ります。ご本人様確認が取れない場合、個人情報保護の観点から詳細なご案内ができません。ご確認の上、再度お問い合わせください。"
+                        if ja else
+                        "I apologize, but without verifying your identity, I cannot access your account details due to privacy regulations. Please verify your information and call back."
+                    )
+                    events.append({"type": "escalate", "payload": {"reason": "kyc_auth_failed"}, "ts": int(time.time() * 1000)})
+                    events.append({"type": "end_call", "payload": {"status": "auth_failed"}, "ts": int(time.time() * 1000)})
+                    return reply, events
+                reply = (
+                    f"恐れ入ります。「{_quote(ctx.user_text)}」からは認証情報を確認できませんでした。生年月日、またはお電話番号の下4桁をお知らせください。"
+                    if ja else
+                    f"Thanks — I didn't catch a verifiable detail in \"{_quote(ctx.user_text)}\". Could you please share your date of birth or the last 4 digits of your registered phone number?"
+                )
+                return reply, events
+
+            # Credential-like content heard: verification genuinely provided.
             ctx.state["stage"] = "service_inquiry"
             ctx.state["identity_verified"] = True
             reply = tmpl[2]()
@@ -289,6 +415,15 @@ class GeneralizedVoiceAgent:
             return reply, events
 
         else:
+            # Late credential (user answered one turn late): still honor it if
+            # we are still waiting on verification.
+            if (ctx.state.get("stage") in (None, "identity_verification")
+                    and _heard_credential(ctx.user_text, ctx.language)):
+                ctx.state["stage"] = "service_inquiry"
+                ctx.state["identity_verified"] = True
+                reply = tmpl[2]()
+                events.append({"type": "identity_verified", "payload": {"verified": True}, "ts": int(time.time() * 1000)})
+                return reply, events
             ctx.state["stage"] = "resolved"
             reply = tmpl["default"]
             events.append({"type": "end_call", "payload": {"status": "resolved"}, "ts": int(time.time() * 1000)})
@@ -310,9 +445,11 @@ class GeneralizedVoiceAgent:
         tmpl = _COLLECTIONS_TEMPLATES.get(ctx.language, _COLLECTIONS_TEMPLATES["en"])
         events = []
         user_lower = ctx.user_text.lower()
+        ja = ctx.language == "ja"
 
-        # Stop contact check
-        stop_patterns = ["stop calling", "do not call", "remove my number", "don't call", "連絡しないで", "電話しないで", "かけてこないで", "二度と"]
+        # Stop contact applies on any turn.
+        stop_patterns = ["stop calling", "do not call", "remove my number", "don't call", "連絡しないで", "電話しないで", "かけてこないで", "二度と",
+                         "kakenaide", "denwa shinaide", "nidoto"]
         if any(sp in user_lower for sp in stop_patterns):
             ctx.state["stop_contact"] = True
             ctx.state["stage"] = "stop_contact"
@@ -320,50 +457,86 @@ class GeneralizedVoiceAgent:
             events.append({"type": "end_call", "payload": {"status": "stop_contact"}, "ts": int(time.time() * 1000)})
             reply = (
                 "ご連絡停止のご要望を承りました。お電話番号を連絡停止リストに登録いたしました。失礼いたします。"
-                if ctx.language == "ja" else
+                if ja else
                 "We have recorded your stop-contact request and added your number to our suppression list. We will not contact you again. Goodbye."
+            )
+            return reply, events
+
+        # Wrong-person denial applies on any turn.
+        wrong_person_patterns = ["wrong person", "not me", "wrong number", "don't know", "人違い", "違います", "間違い電話", "そんな人はいません",
+                                 "hitochigai", "chigaimasu", "machigai denwa"]
+        if any(wp in user_lower for wp in wrong_person_patterns):
+            ctx.state["identity_verified"] = False
+            ctx.state["third_party_detected"] = True
+            ctx.state["stage"] = "third_party"
+            events.append({"type": "escalate", "payload": {"reason": "wrong_person"}, "ts": int(time.time() * 1000)})
+            events.append({"type": "end_call", "payload": {"status": "third_party"}, "ts": int(time.time() * 1000)})
+            reply = (
+                "大変失礼いたしました。間違い電話のお詫びを申し上げます。登録情報を確認いたします。失礼いたします。"
+                if ja else
+                "I apologize for the inconvenience. We have noted that this is the incorrect contact number and will update our records. Have a good day."
             )
             return reply, events
 
         if ctx.turn == 1:
             ctx.state["stage"] = "identity_verification"
             ctx.state["debtor_name"] = debtor_name
+            ctx.state["verification_attempts"] = 0
             reply = tmpl[1](debtor_name, ctx.greeting)
             events.append({"type": "state_change", "payload": {"stage": "auth_requested", "domain": "collections", "language": ctx.language}, "ts": int(time.time() * 1000)})
             return reply, events
 
-        elif ctx.turn == 2:
-            # Check third party / wrong person denial
-            wrong_person_patterns = ["wrong person", "not me", "wrong number", "don't know", "人違い", "違います", "間違い電話", "そんな人はいません"]
-            if any(wp in user_lower for wp in wrong_person_patterns):
-                ctx.state["identity_verified"] = False
-                ctx.state["third_party_detected"] = True
-                events.append({"type": "escalate", "payload": {"reason": "wrong_person"}, "ts": int(time.time() * 1000)})
-                events.append({"type": "end_call", "payload": {"status": "third_party"}, "ts": int(time.time() * 1000)})
+        stage = ctx.state.get("stage", "identity_verification")
+
+        if stage == "identity_verification":
+            if _heard_date(ctx.user_text, ctx.language):
+                ctx.state["stage"] = "negotiation"
+                ctx.state["identity_verified"] = True
+                reply = tmpl[2]()
+                events.append({"type": "identity_verified", "payload": {"verified": True}, "ts": int(time.time() * 1000)})
+                return reply, events
+            attempts = int(ctx.state.get("verification_attempts", 0)) + 1
+            ctx.state["verification_attempts"] = attempts
+            if attempts >= 2:
+                ctx.state["stage"] = "auth_failed"
+                events.append({"type": "escalate", "payload": {"reason": "verification_failed"}, "ts": int(time.time() * 1000)})
                 reply = (
-                    "大変失礼いたしました。間違い電話のお詫びを申し上げます。登録情報を確認いたします。失礼いたします。"
-                    if ctx.language == "ja" else
-                    "I apologize for the inconvenience. We have noted that this is the incorrect contact number and will update our records. Have a good day."
+                    "ご本人様確認が取れませんでしたので、大切なお知らせをお伝えできません。ご確認のうえ、改めてお問い合わせください。失礼いたします。"
+                    if ja else
+                    "I'm sorry, but I can't verify your identity, so I can't share the account details. Please check your information and call us back. Goodbye."
                 )
                 return reply, events
-
-            ctx.state["stage"] = "negotiation"
-            ctx.state["identity_verified"] = True
-            reply = tmpl[2]()
-            events.append({"type": "identity_verified", "payload": {"verified": True}, "ts": int(time.time() * 1000)})
+            reply = (
+                f"恐れ入ります。「{_quote(ctx.user_text)}」からは生年月日を確認できませんでした。ご本人様確認のため、生年月日をお知らせいただけますでしょうか。"
+                if ja else
+                f"Thanks — I didn't catch a date of birth in \"{_quote(ctx.user_text)}\". To verify your identity, could you please share your date of birth?"
+            )
             return reply, events
 
-        elif ctx.turn == 3:
-            ctx.state["stage"] = "promise_to_pay"
-            ctx.state["promise_amount"] = 35000 if ctx.language == "ja" else 350
-            reply = tmpl[3]()
-            events.append({"type": "promise_to_pay", "payload": {"amount": ctx.state["promise_amount"]}, "ts": int(time.time() * 1000)})
-            events.append({"type": "end_call", "payload": {"status": "completed"}, "ts": int(time.time() * 1000)})
+        if stage == "negotiation":
+            if _agrees(ctx.user_text, ctx.language):
+                ctx.state["stage"] = "promise_recorded"
+                ctx.state["promise_amount"] = 35000 if ja else 350
+                reply = tmpl[3]()
+                events.append({"type": "promise_to_pay", "payload": {"amount": ctx.state["promise_amount"]}, "ts": int(time.time() * 1000)})
+                events.append({"type": "end_call", "payload": {"status": "completed"}, "ts": int(time.time() * 1000)})
+                return reply, events
+            if _hardship(ctx.user_text, ctx.language):
+                reply = (
+                    f"ご事情を承りました。「{_quote(ctx.user_text)}」とのこと、分割でのお支払いもご相談可能です。月々のお支払いが可能な金額の目安はございますでしょうか。"
+                    if ja else
+                    f"I understand — thanks for telling me. Given \"{_quote(ctx.user_text)}\", we can look at a payment schedule instead of a single payment. Roughly what monthly amount would be manageable for you?"
+                )
+                return reply, events
+            reply = (
+                f"承知いたしました。「{_quote(ctx.user_text)}」について確認させてください。本日中のお支払いは可能でしょうか、それとも分割のご相談をご希望でしょうか。"
+                if ja else
+                f"Got it — just to confirm on \"{_quote(ctx.user_text)}\": are you able to pay the balance today, or would you prefer we set up a payment schedule?"
+            )
             return reply, events
 
-        else:
-            reply = tmpl["default"]
-            events.append({"type": "end_call", "payload": {"status": "completed"}, "ts": int(time.time() * 1000)})
-            return reply, events
+        reply = tmpl["default"]
+        events.append({"type": "end_call", "payload": {"status": "completed"}, "ts": int(time.time() * 1000)})
+        return reply, events
 
 

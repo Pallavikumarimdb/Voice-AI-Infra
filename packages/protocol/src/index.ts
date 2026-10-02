@@ -34,6 +34,8 @@ export interface FinalMessage {
   words: WordTs[];
   tCapture: number;
   tFinal: number;
+  /** True when the gateway classified this as speaker echo (shown, not acted on). */
+  echo?: boolean;
 }
 
 export interface TranslatedMessage {

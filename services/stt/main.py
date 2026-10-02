@@ -203,8 +203,19 @@ async def websocket_stream(websocket: WebSocket):
                                     }
                                     await websocket.send_text(json.dumps(partial_msg))
                 except Exception:
-                    # One bad frame must never kill the session; log and keep going.
-                    traceback.print_exc()
+                    # Send/write failures on a dying socket are expected during
+                    # teardown: end the stream quietly instead of traceback-spam.
+                    # Genuine per-frame bugs still surface via the traceback below.
+                    try:
+                        from starlette.websockets import WebSocketState
+                        alive = websocket.client_state == WebSocketState.CONNECTED
+                    except Exception:
+                        alive = True
+                    if alive:
+                        traceback.print_exc()
+                    else:
+                        print(f"[STT] Stream ended for session {session.session_id}.")
+                        break
 
             elif "text" in message and message["text"] is not None:
                 # Handle JSON control frames
@@ -227,6 +238,15 @@ async def websocket_stream(websocket: WebSocket):
                             session.sample_rate = sr if 8000 <= sr <= 48000 else 16000
                         except (ValueError, TypeError):
                             session.sample_rate = 16000
+
+                        # Continue utterance numbering across mid-call reconnects
+                        # so the gateway never merges unrelated turns.
+                        try:
+                            start_utt = int(payload.get("startUttId", 1))
+                            if 1 <= start_utt <= 100000:
+                                session.current_utt_id = start_utt
+                        except (ValueError, TypeError):
+                            pass
 
                         print(f"[STT] Started session {session.session_id} (srcLang: {session.src_lang}, sampleRate: {session.sample_rate})")
                     elif msg_type == "session_stop":

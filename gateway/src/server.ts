@@ -33,6 +33,31 @@ const mtClient = new MTClient(MT_URL);
 const agentClient = new AgentClient(AGENT_URL);
 const ttsClient = new TTSClient(TTS_URL);
 
+/**
+ * Word overlap between a fresh STT final and the agent's last utterance.
+ * Used to catch the agent's own voice (speaker echo) being transcribed as
+ * the caller — without this, the echo eats a turn and triggers a bogus reply.
+ */
+function echoOverlap(finalText: string, agentText: string): { ratio: number; shared: number } {
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9faf\s]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean);
+  const f = norm(finalText);
+  if (f.length === 0) return { ratio: 0, shared: 0 };
+  const a = new Set(norm(agentText));
+  const shared = f.filter((t) => a.has(t)).length;
+  let ratio = shared / f.length;
+  // CJK has no spaces: fall back to substring containment for longer finals.
+  const strippedFinal = finalText.replace(/\s+/g, '');
+  if (strippedFinal.length >= 4 && agentText.replace(/\s+/g, '').includes(strippedFinal)) {
+    return { ratio: Math.max(ratio, 0.6), shared: Math.max(shared, 3) };
+  }
+  return { ratio, shared };
+}
+
 // HTTP Server for metrics, health, and reviewer data API
 const server = http.createServer(async (req, res) => {
   // 1. Data API endpoints for reviewer UI (/api/*)
@@ -113,6 +138,9 @@ wss.on('connection', (clientWs: WebSocket) => {
         const now = Date.now();
 
         if (sttMsg.type === 'partial') {
+          if (sttMsg.uttId !== undefined) {
+            session.lastSttUttId = Math.max(session.lastSttUttId || 0, sttMsg.uttId);
+          }
           // Record capture-to-partial latency if tCapture is present
           if (sttMsg.tCapture) {
             const latSec = (now - sttMsg.tCapture) / 1000;
@@ -147,6 +175,9 @@ wss.on('connection', (clientWs: WebSocket) => {
             const latSec = (tFinal - sttMsg.tCapture) / 1000;
             metrics.e2eLatency.observe({ boundary: 'capture_to_final' }, latSec);
           }
+          if (sttMsg.uttId !== undefined) {
+            session.lastSttUttId = Math.max(session.lastSttUttId || 0, sttMsg.uttId);
+          }
 
           // Forward final transcript to client immediately
           sendJson(clientWs, { ...sttMsg, tFinal });
@@ -155,7 +186,21 @@ wss.on('connection', (clientWs: WebSocket) => {
             const currentUttId = sttMsg.uttId;
             const currentText = sttMsg.text;
 
-            if (session.mode === 'agent') {
+            // Echo check (agent mode only): audio captured while our own voice
+            // was playing that heavily overlaps it is speaker echo, not caller
+            // speech. Display it, but never let it eat a turn or cut playback.
+            let isEcho = false;
+            if (session.mode === 'agent' && session.lastAgentText && session.lastAgentSpeechEndAt && sttMsg.tCapture) {
+              const heardDuringPlayback =
+                sttMsg.tCapture < session.lastAgentSpeechEndAt &&
+                session.lastAgentSpeechEndAt - sttMsg.tCapture < 30000;
+              if (heardDuringPlayback) {
+                const { ratio, shared } = echoOverlap(currentText, session.lastAgentText);
+                isEcho = shared >= 3 && ratio >= 0.5;
+              }
+            }
+
+            if (session.mode === 'agent' && !isEcho) {
               const res = await agentClient.turn({
                 sessionId: session.id,
                 uttId: currentUttId,
@@ -185,6 +230,7 @@ wss.on('connection', (clientWs: WebSocket) => {
                   metrics: res.metrics,
                   tEmit: tAgentDone,
                 });
+                session.lastAgentText = res.text;
 
                 if (res.metrics?.llmMs) {
                   metrics.agentTurnLatency.observe({ stage: 'llm_fast' }, res.metrics.llmMs / 1000);
@@ -243,6 +289,7 @@ wss.on('connection', (clientWs: WebSocket) => {
                       tEnd: Date.now()
                     });
                     session.isAgentSpeaking = false;
+                    session.lastAgentSpeechEndAt = Date.now();
                   }
                 }).catch((ttsErr) => {
                   if (ttsErr.name !== 'AbortError') {
@@ -257,6 +304,9 @@ wss.on('connection', (clientWs: WebSocket) => {
                   uttId: currentUttId,
                 });
               }
+            } else if (isEcho) {
+              console.log(`[Gateway] Echo suppressed for utterance ${currentUttId} (matches own playback)`);
+              sendJson(clientWs, { ...sttMsg, tFinal, echo: true });
             } else {
               // Asynchronously dispatch translation to stateless MT service
               const res = await mtClient.translate({
@@ -431,6 +481,7 @@ wss.on('connection', (clientWs: WebSocket) => {
               events: [],
               tEmit: Date.now(),
             });
+            session.lastAgentText = greeting;
 
             session.isAgentSpeaking = true;
             session.agentSpeakingStartedAt = Date.now();
@@ -470,6 +521,7 @@ wss.on('connection', (clientWs: WebSocket) => {
                     tEnd: Date.now(),
                   });
                   session.isAgentSpeaking = false;
+                  session.lastAgentSpeechEndAt = Date.now();
                 }
               })
               .catch((ttsErr) => {
