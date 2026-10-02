@@ -115,6 +115,19 @@ _CUSTOM_TEMPLATES = {
 }
 
 
+from dataclasses import dataclass
+
+@dataclass
+class TurnContext:
+    turn: int
+    user_text: str
+    state: Dict[str, Any]
+    greeting: str
+    instructions: str
+    context: Dict[str, Any]
+    language: str = "ja"
+
+
 class GeneralizedVoiceAgent:
     """
     Generalized agent handling domain-specific prompts, instructions,
@@ -124,6 +137,12 @@ class GeneralizedVoiceAgent:
 
     def __init__(self, guard: Optional[ComplianceGuard] = None):
         self.guard = guard or ComplianceGuard()
+        self._handlers = {
+            "screening": self._handle_screening,
+            "kyc": self._handle_kyc,
+            "collections": self._handle_collections,
+            "custom": self._handle_custom,
+        }
 
     def process_turn(
         self,
@@ -155,25 +174,18 @@ class GeneralizedVoiceAgent:
                 "language": language,
             })
 
-        # Route to domain handler with language
-        if domain == "screening":
-            reply_text, turn_events = self._handle_screening(
-                turn_count, user_text, state, custom_greeting, custom_instructions, context_data, language
-            )
-        elif domain == "kyc":
-            reply_text, turn_events = self._handle_kyc(
-                turn_count, user_text, state, custom_greeting, custom_instructions, context_data, language
-            )
-        elif domain == "collections":
-            reply_text, turn_events = self._handle_collections(
-                turn_count, user_text, state, custom_greeting, custom_instructions, context_data, language
-            )
-        else:
-            # Custom Enterprise Agent
-            reply_text, turn_events = self._handle_custom(
-                turn_count, user_text, state, custom_greeting, custom_instructions, context_data, language
-            )
+        ctx = TurnContext(
+            turn=turn_count,
+            user_text=user_text,
+            state=state,
+            greeting=custom_greeting,
+            instructions=custom_instructions,
+            context=context_data,
+            language=language
+        )
 
+        handler = self._handlers.get(domain, self._handle_custom)
+        reply_text, turn_events = handler(ctx)
         events.extend(turn_events)
 
         if audit_logger:
@@ -200,40 +212,31 @@ class GeneralizedVoiceAgent:
 
     # ─── Screening ────────────────────────────────────────────────────────────
 
-    def _handle_screening(
-        self,
-        turn: int,
-        user_text: str,
-        state: Dict[str, Any],
-        greeting: str,
-        instructions: str,
-        context: Dict[str, Any],
-        language: str = "ja",
-    ) -> tuple[str, List[Dict[str, Any]]]:
-        candidate_name = context.get("candidateName", "佐藤 健一" if language == "ja" else "Alex Johnson")
-        target_role = context.get("targetRole", "シニアソフトウェアエンジニア" if language == "ja" else "Senior Software Engineer")
-        tmpl = _SCREENING_TEMPLATES.get(language, _SCREENING_TEMPLATES["en"])
+    def _handle_screening(self, ctx: TurnContext) -> tuple[str, List[Dict[str, Any]]]:
+        candidate_name = ctx.context.get("candidateName", "佐藤 健一" if ctx.language == "ja" else "Alex Johnson")
+        target_role = ctx.context.get("targetRole", "シニアソフトウェアエンジニア" if ctx.language == "ja" else "Senior Software Engineer")
+        tmpl = _SCREENING_TEMPLATES.get(ctx.language, _SCREENING_TEMPLATES["en"])
         events = []
 
-        if turn == 1:
-            state["stage"] = "experience_inquiry"
-            state["candidate_name"] = candidate_name
-            state["target_role"] = target_role
-            reply = tmpl[1](candidate_name, target_role, greeting)
-            events.append({"type": "state_change", "payload": {"stage": "experience_inquiry", "domain": "screening", "language": language}, "ts": int(time.time() * 1000)})
+        if ctx.turn == 1:
+            ctx.state["stage"] = "experience_inquiry"
+            ctx.state["candidate_name"] = candidate_name
+            ctx.state["target_role"] = target_role
+            reply = tmpl[1](candidate_name, target_role, ctx.greeting)
+            events.append({"type": "state_change", "payload": {"stage": "experience_inquiry", "domain": "screening", "language": ctx.language}, "ts": int(time.time() * 1000)})
             return reply, events
 
-        elif turn == 2:
-            state["stage"] = "compensation_and_work_style"
-            state["tech_stack_noted"] = True
+        elif ctx.turn == 2:
+            ctx.state["stage"] = "compensation_and_work_style"
+            ctx.state["tech_stack_noted"] = True
             reply = tmpl[2]()
             events.append({"type": "state_change", "payload": {"stage": "compensation_and_work_style", "domain": "screening"}, "ts": int(time.time() * 1000)})
             return reply, events
 
-        elif turn == 3:
-            state["stage"] = "closing"
-            state["qualified"] = True
-            state["compensation_fit"] = True
+        elif ctx.turn == 3:
+            ctx.state["stage"] = "closing"
+            ctx.state["qualified"] = True
+            ctx.state["compensation_fit"] = True
             reply = tmpl[3](target_role)
             events.append({"type": "candidate_qualified", "payload": {"qualified": True, "role": target_role}, "ts": int(time.time() * 1000)})
             events.append({"type": "end_call", "payload": {"status": "completed"}, "ts": int(time.time() * 1000)})
@@ -246,137 +249,110 @@ class GeneralizedVoiceAgent:
 
     # ─── KYC ──────────────────────────────────────────────────────────────────
 
-    def _handle_kyc(
-        self,
-        turn: int,
-        user_text: str,
-        state: Dict[str, Any],
-        greeting: str,
-        instructions: str,
-        context: Dict[str, Any],
-        language: str = "ja",
-    ) -> tuple[str, List[Dict[str, Any]]]:
-        customer_name = context.get("customerName", "鈴木 一郎" if language == "ja" else "John Smith")
-        account_id = context.get("accountId", "ACC-88219")
-        tmpl = _KYC_TEMPLATES.get(language, _KYC_TEMPLATES["en"])
+    def _handle_kyc(self, ctx: TurnContext) -> tuple[str, List[Dict[str, Any]]]:
+        customer_name = ctx.context.get("customerName", "鈴木 一郎" if ctx.language == "ja" else "John Smith")
+        account_id = ctx.context.get("accountId", "ACC-88219")
+        tmpl = _KYC_TEMPLATES.get(ctx.language, _KYC_TEMPLATES["en"])
         events = []
-        user_lower = user_text.lower()
+        user_lower = ctx.user_text.lower()
 
-        if turn == 1:
-            state["stage"] = "identity_verification"
-            reply = tmpl[1](customer_name, account_id, greeting)
-            events.append({"type": "state_change", "payload": {"stage": "auth_requested", "domain": "kyc", "language": language}, "ts": int(time.time() * 1000)})
+        if ctx.turn == 1:
+            ctx.state["stage"] = "identity_verification"
+            reply = tmpl[1](customer_name, account_id, ctx.greeting)
+            events.append({"type": "state_change", "payload": {"stage": "auth_requested", "domain": "kyc", "language": ctx.language}, "ts": int(time.time() * 1000)})
             return reply, events
 
-        elif turn == 2:
+        elif ctx.turn == 2:
             # Check for denial or refusal to authenticate
             denial_patterns = ["違う", "違います", "分からない", "教えられない", "誰", "no", "wrong", "refuse", "not me", "don't know", "cannot"]
             if any(p in user_lower for p in denial_patterns):
-                state["identity_verified"] = False
-                state["stage"] = "auth_failed"
+                ctx.state["identity_verified"] = False
+                ctx.state["stage"] = "auth_failed"
                 reply = (
                     "恐れ入ります。ご本人様確認が取れない場合、個人情報保護の観点から詳細なご案内ができません。ご確認の上、再度お問い合わせください。"
-                    if language == "ja" else
+                    if ctx.language == "ja" else
                     "I apologize, but without verifying your identity, I cannot access your account details due to privacy regulations. Please verify your information and call back."
                 )
                 events.append({"type": "escalate", "payload": {"reason": "kyc_auth_failed"}, "ts": int(time.time() * 1000)})
                 events.append({"type": "end_call", "payload": {"status": "auth_failed"}, "ts": int(time.time() * 1000)})
                 return reply, events
 
-            state["stage"] = "service_inquiry"
-            state["identity_verified"] = True
+            ctx.state["stage"] = "service_inquiry"
+            ctx.state["identity_verified"] = True
             reply = tmpl[2]()
             events.append({"type": "identity_verified", "payload": {"verified": True}, "ts": int(time.time() * 1000)})
             return reply, events
 
         else:
-            state["stage"] = "resolved"
+            ctx.state["stage"] = "resolved"
             reply = tmpl["default"]
             events.append({"type": "end_call", "payload": {"status": "resolved"}, "ts": int(time.time() * 1000)})
             return reply, events
 
     # ─── Custom ───────────────────────────────────────────────────────────────
 
-    def _handle_custom(
-        self,
-        turn: int,
-        user_text: str,
-        state: Dict[str, Any],
-        greeting: str,
-        instructions: str,
-        context: Dict[str, Any],
-        language: str = "ja",
-    ) -> tuple[str, List[Dict[str, Any]]]:
-        tmpl_fn = _CUSTOM_TEMPLATES.get(language, _CUSTOM_TEMPLATES["en"])
+    def _handle_custom(self, ctx: TurnContext) -> tuple[str, List[Dict[str, Any]]]:
+        tmpl_fn = _CUSTOM_TEMPLATES.get(ctx.language, _CUSTOM_TEMPLATES["en"])
         events = []
-        reply = tmpl_fn(user_text, turn, greeting)
-        events.append({"type": "state_change", "payload": {"turn": turn, "domain": "custom", "language": language}, "ts": int(time.time() * 1000)})
+        reply = tmpl_fn(ctx.user_text, ctx.turn, ctx.greeting)
+        events.append({"type": "state_change", "payload": {"turn": ctx.turn, "domain": "custom", "language": ctx.language}, "ts": int(time.time() * 1000)})
         return reply, events
 
     # ─── Collections ──────────────────────────────────────────────────────────
 
-    def _handle_collections(
-        self,
-        turn: int,
-        user_text: str,
-        state: Dict[str, Any],
-        greeting: str,
-        instructions: str,
-        context: Dict[str, Any],
-        language: str = "ja",
-    ) -> tuple[str, List[Dict[str, Any]]]:
-        debtor_name = context.get("debtorName", "佐藤 健一" if language == "ja" else "Alex Johnson")
-        tmpl = _COLLECTIONS_TEMPLATES.get(language, _COLLECTIONS_TEMPLATES["en"])
+    def _handle_collections(self, ctx: TurnContext) -> tuple[str, List[Dict[str, Any]]]:
+        debtor_name = ctx.context.get("debtorName", "佐藤 健一" if ctx.language == "ja" else "Alex Johnson")
+        tmpl = _COLLECTIONS_TEMPLATES.get(ctx.language, _COLLECTIONS_TEMPLATES["en"])
         events = []
-        user_lower = user_text.lower()
+        user_lower = ctx.user_text.lower()
 
         # Stop contact check
         stop_patterns = ["stop calling", "do not call", "remove my number", "don't call", "連絡しないで", "電話しないで", "かけてこないで", "二度と"]
         if any(sp in user_lower for sp in stop_patterns):
-            state["stop_contact"] = True
-            state["stage"] = "stop_contact"
+            ctx.state["stop_contact"] = True
+            ctx.state["stage"] = "stop_contact"
             events.append({"type": "stop_contact", "payload": {"requested": True}, "ts": int(time.time() * 1000)})
             events.append({"type": "end_call", "payload": {"status": "stop_contact"}, "ts": int(time.time() * 1000)})
             reply = (
                 "ご連絡停止のご要望を承りました。お電話番号を連絡停止リストに登録いたしました。失礼いたします。"
-                if language == "ja" else
+                if ctx.language == "ja" else
                 "We have recorded your stop-contact request and added your number to our suppression list. We will not contact you again. Goodbye."
             )
             return reply, events
 
-        if turn == 1:
-            state["stage"] = "identity_verification"
-            state["debtor_name"] = debtor_name
-            reply = tmpl[1](debtor_name, greeting)
-            events.append({"type": "state_change", "payload": {"stage": "auth_requested", "domain": "collections", "language": language}, "ts": int(time.time() * 1000)})
+        if ctx.turn == 1:
+            ctx.state["stage"] = "identity_verification"
+            ctx.state["debtor_name"] = debtor_name
+            reply = tmpl[1](debtor_name, ctx.greeting)
+            events.append({"type": "state_change", "payload": {"stage": "auth_requested", "domain": "collections", "language": ctx.language}, "ts": int(time.time() * 1000)})
             return reply, events
 
-        elif turn == 2:
+        elif ctx.turn == 2:
             # Check third party / wrong person denial
             wrong_person_patterns = ["wrong person", "not me", "wrong number", "don't know", "人違い", "違います", "間違い電話", "そんな人はいません"]
             if any(wp in user_lower for wp in wrong_person_patterns):
-                state["identity_verified"] = False
-                state["third_party_detected"] = True
+                ctx.state["identity_verified"] = False
+                ctx.state["third_party_detected"] = True
                 events.append({"type": "escalate", "payload": {"reason": "wrong_person"}, "ts": int(time.time() * 1000)})
                 events.append({"type": "end_call", "payload": {"status": "third_party"}, "ts": int(time.time() * 1000)})
                 reply = (
                     "大変失礼いたしました。間違い電話のお詫びを申し上げます。登録情報を確認いたします。失礼いたします。"
-                    if language == "ja" else
+                    if ctx.language == "ja" else
                     "I apologize for the inconvenience. We have noted that this is the incorrect contact number and will update our records. Have a good day."
                 )
                 return reply, events
 
-            state["stage"] = "negotiation"
-            state["identity_verified"] = True
+            ctx.state["stage"] = "negotiation"
+            ctx.state["identity_verified"] = True
             reply = tmpl[2]()
             events.append({"type": "identity_verified", "payload": {"verified": True}, "ts": int(time.time() * 1000)})
             return reply, events
 
-        elif turn == 3:
-            state["stage"] = "promise_to_pay"
-            state["promise_amount"] = 35000 if language == "ja" else 350
+        elif ctx.turn == 3:
+            ctx.state["stage"] = "promise_to_pay"
+            ctx.state["promise_amount"] = 35000 if ctx.language == "ja" else 350
             reply = tmpl[3]()
-            events.append({"type": "promise_to_pay", "payload": {"amount": state["promise_amount"]}, "ts": int(time.time() * 1000)})
+            events.append({"type": "promise_to_pay", "payload": {"amount": ctx.state["promise_amount"]}, "ts": int(time.time() * 1000)})
             events.append({"type": "end_call", "payload": {"status": "completed"}, "ts": int(time.time() * 1000)})
             return reply, events
 
@@ -384,4 +360,5 @@ class GeneralizedVoiceAgent:
             reply = tmpl["default"]
             events.append({"type": "end_call", "payload": {"status": "completed"}, "ts": int(time.time() * 1000)})
             return reply, events
+
 

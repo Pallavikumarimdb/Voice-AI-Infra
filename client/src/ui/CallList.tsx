@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { CallSummaryItem } from '../data/types.ts';
+import { SourceBadge, ComplianceBadge, HardFailBadge } from './Badges.tsx';
 
 interface CallListProps {
   calls: CallSummaryItem[];
@@ -222,20 +223,8 @@ export const CallList: React.FC<CallListProps> = ({ calls, onSelectCall, loading
                   </td>
 
                   <td style={{ padding: '12px 16px' }}>
-                    <span
-                      style={{
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        background: call.source === 'live' ? 'rgba(56, 139, 253, 0.15)' : 'rgba(139, 148, 158, 0.15)',
-                        color: call.source === 'live' ? '#58a6ff' : '#c9d1d9',
-                        marginRight: '6px',
-                      }}
-                    >
-                      {call.source.toUpperCase()}
-                    </span>
-                    <span style={{ color: '#8b949e' }}>{call.variant}</span>
+                    <SourceBadge source={call.source} />
+                    <span style={{ color: '#8b949e', marginLeft: '6px' }}>{call.variant}</span>
                   </td>
 
                   <td style={{ padding: '12px 16px', color: '#e6edf3', fontWeight: 500 }}>
@@ -251,54 +240,11 @@ export const CallList: React.FC<CallListProps> = ({ calls, onSelectCall, loading
                   </td>
 
                   <td style={{ padding: '12px 16px' }}>
-                    {call.hasComplianceBlock ? (
-                      <span
-                        style={{
-                          padding: '2px 8px',
-                          borderRadius: '10px',
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          background: 'rgba(210, 153, 34, 0.15)',
-                          color: '#d29922',
-                          border: '1px solid rgba(210, 153, 34, 0.3)',
-                        }}
-                      >
-                        ⚠ Guard Intercepted
-                      </span>
-                    ) : (
-                      <span style={{ color: '#8b949e' }}>—</span>
-                    )}
+                    <ComplianceBadge blocked={call.hasComplianceBlock} />
                   </td>
 
                   <td style={{ padding: '12px 16px' }}>
-                    {call.hardFailPassed ? (
-                      <span
-                        style={{
-                          padding: '2px 8px',
-                          borderRadius: '10px',
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          background: 'rgba(63, 185, 80, 0.15)',
-                          color: '#3fb950',
-                        }}
-                      >
-                        ✓ Passed
-                      </span>
-                    ) : (
-                      <span
-                        style={{
-                          padding: '2px 8px',
-                          borderRadius: '10px',
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          background: 'rgba(248, 81, 73, 0.15)',
-                          color: '#f85149',
-                          border: '1px solid rgba(248, 81, 73, 0.4)',
-                        }}
-                      >
-                        ✗ Hard-Fail Hit
-                      </span>
-                    )}
+                    <HardFailBadge passed={call.hardFailPassed} />
                   </td>
 
                   <td style={{ padding: '12px 16px' }}>

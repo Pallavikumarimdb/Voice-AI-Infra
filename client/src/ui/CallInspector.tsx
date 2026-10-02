@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CallDetail } from '../data/types.ts';
+import { HashChainBadge, HardFailBadge, ComplianceBadge, LatencyBadge, SourceBadge } from './Badges.tsx';
 
 interface CallInspectorProps {
   call: CallDetail;
@@ -9,6 +10,20 @@ interface CallInspectorProps {
 export const CallInspector: React.FC<CallInspectorProps> = ({ call, onBack }) => {
   const [revealHiddenFacts, setRevealHiddenFacts] = useState(false);
   const [tamperedDemo, setTamperedDemo] = useState(false);
+  const [playingState, setPlayingState] = useState<{
+    turnIdx: number;
+    speaker: 'user' | 'agent';
+  } | null>(null);
+  const [isPlayingFullCall, setIsPlayingFullCall] = useState(false);
+  const fullCallCancelRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   // Group or process turns from audit log
   const auditRecords = call.auditLog || [];
@@ -81,6 +96,88 @@ export const CallInspector: React.FC<CallInspectorProps> = ({ call, onBack }) =>
     ? { valid: false, error: 'Hash mismatch at seq 4: stored hash != recomputed digest', verifiedCount: 3, brokenSeq: 4 }
     : call.hashChain;
 
+  const playUtterance = (text: string, turnIdx: number, speaker: 'user' | 'agent', onEnd?: () => void) => {
+    if (!('speechSynthesis' in window)) {
+      alert('Speech synthesis is not supported by your browser.');
+      return;
+    }
+    window.speechSynthesis.cancel();
+    setPlayingState({ turnIdx, speaker });
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    const hasJapanese = /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf]/.test(text);
+    utterance.lang = hasJapanese ? 'ja-JP' : 'en-US';
+    if (speaker === 'user') {
+      utterance.pitch = 0.92;
+      utterance.rate = 1.0;
+    } else {
+      utterance.pitch = 1.15;
+      utterance.rate = 1.05;
+    }
+
+    utterance.onend = () => {
+      setPlayingState(null);
+      if (onEnd) onEnd();
+    };
+
+    utterance.onerror = () => {
+      setPlayingState(null);
+      setIsPlayingFullCall(false);
+    };
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const stopPlayback = () => {
+    fullCallCancelRef.current = true;
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setPlayingState(null);
+    setIsPlayingFullCall(false);
+  };
+
+  const playFullCall = () => {
+    if (isPlayingFullCall) {
+      stopPlayback();
+      return;
+    }
+
+    const playlist: Array<{ turnIdx: number; speaker: 'user' | 'agent'; text: string }> = [];
+    turns.forEach((t, idx) => {
+      if (t.userText && t.userText.trim()) {
+        playlist.push({ turnIdx: idx, speaker: 'user', text: t.userText });
+      }
+      const agentText = t.agentFinal || t.agentAttempted;
+      if (agentText && agentText.trim()) {
+        playlist.push({ turnIdx: idx, speaker: 'agent', text: agentText });
+      }
+    });
+
+    if (playlist.length === 0) return;
+
+    fullCallCancelRef.current = false;
+    setIsPlayingFullCall(true);
+
+    let step = 0;
+    const playNext = () => {
+      if (fullCallCancelRef.current || step >= playlist.length) {
+        setIsPlayingFullCall(false);
+        setPlayingState(null);
+        return;
+      }
+      const item = playlist[step];
+      step++;
+      playUtterance(item.text, item.turnIdx, item.speaker, () => {
+        setTimeout(() => {
+          if (!fullCallCancelRef.current) playNext();
+        }, 350);
+      });
+    };
+
+    playNext();
+  };
+
   return (
     <div style={{ maxWidth: '1300px', margin: '0 auto', padding: '24px 16px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
       {/* Top Header Bar */}
@@ -117,35 +214,12 @@ export const CallInspector: React.FC<CallInspectorProps> = ({ call, onBack }) =>
             {tamperedDemo ? 'Reset Hash Chain' : 'Test Tampered Fixture'}
           </button>
 
-          {effectiveHashChain.valid ? (
-            <span
-              style={{
-                padding: '4px 12px',
-                borderRadius: '12px',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                background: 'rgba(63, 185, 80, 0.15)',
-                color: '#3fb950',
-                border: '1px solid rgba(63, 185, 80, 0.4)',
-              }}
-            >
-              ✓ SHA-256 Hash Chain Intact ({effectiveHashChain.verifiedCount}/{effectiveHashChain.verifiedCount} records)
-            </span>
-          ) : (
-            <span
-              style={{
-                padding: '4px 12px',
-                borderRadius: '12px',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                background: 'rgba(248, 81, 73, 0.2)',
-                color: '#f85149',
-                border: '1px solid rgba(248, 81, 73, 0.5)',
-              }}
-            >
-              ⚠ Broken Chain at seq {effectiveHashChain.brokenSeq}: {effectiveHashChain.error}
-            </span>
-          )}
+          <HashChainBadge
+            valid={effectiveHashChain.valid}
+            verifiedCount={effectiveHashChain.verifiedCount}
+            brokenSeq={effectiveHashChain.brokenSeq}
+            error={effectiveHashChain.error}
+          />
         </div>
       </div>
 
@@ -170,8 +244,9 @@ export const CallInspector: React.FC<CallInspectorProps> = ({ call, onBack }) =>
 
         <div>
           <div style={{ fontSize: '0.75rem', color: '#8b949e', textTransform: 'uppercase' }}>Variant & Source</div>
-          <div style={{ fontSize: '0.95rem', color: '#e6edf3' }}>
-            <span style={{ fontWeight: 600 }}>{call.variant}</span> • {call.source.toUpperCase()}
+          <div style={{ fontSize: '0.95rem', color: '#e6edf3', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+            <SourceBadge source={call.source} />
+            <span style={{ fontWeight: 600 }}>{call.variant}</span>
           </div>
         </div>
 
@@ -189,10 +264,8 @@ export const CallInspector: React.FC<CallInspectorProps> = ({ call, onBack }) =>
 
         {call.runData?.hard_fail && (
           <div>
-            <div style={{ fontSize: '0.75rem', color: '#8b949e', textTransform: 'uppercase' }}>Hard-Fail Result</div>
-            <div style={{ fontSize: '0.95rem', fontWeight: 600, color: call.runData.hard_fail.passed ? '#3fb950' : '#f85149' }}>
-              {call.runData.hard_fail.passed ? '✓ 0 Violations' : `✗ ${call.runData.hard_fail.num_final} Violations`}
-            </div>
+            <div style={{ fontSize: '0.75rem', color: '#8b949e', textTransform: 'uppercase', marginBottom: '2px' }}>Hard-Fail Result</div>
+            <HardFailBadge passed={call.runData.hard_fail.passed} numViolations={call.runData.hard_fail.num_final} />
           </div>
         )}
       </div>
@@ -201,9 +274,31 @@ export const CallInspector: React.FC<CallInspectorProps> = ({ call, onBack }) =>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) minmax(320px, 1fr)', gap: '24px', alignItems: 'start' }}>
         {/* Left Column: Turn-by-Turn Timeline */}
         <div>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#f0f6fc', marginBottom: '16px' }}>
-            Turn-by-Turn Execution Timeline
-          </h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#f0f6fc', margin: 0 }}>
+              Turn-by-Turn Execution Timeline
+            </h3>
+            {turns.length > 0 && (
+              <button
+                onClick={isPlayingFullCall ? stopPlayback : playFullCall}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '5px 12px',
+                  borderRadius: '6px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  background: isPlayingFullCall ? 'rgba(248, 81, 73, 0.2)' : 'rgba(56, 139, 253, 0.15)',
+                  color: isPlayingFullCall ? '#f85149' : '#58a6ff',
+                  border: `1px solid ${isPlayingFullCall ? 'rgba(248, 81, 73, 0.4)' : 'rgba(56, 139, 253, 0.4)'}`,
+                  cursor: 'pointer',
+                }}
+              >
+                {isPlayingFullCall ? '⏹ Stop Audio' : '▶ Play Full Call (Synced Audio)'}
+              </button>
+            )}
+          </div>
 
           {turns.length === 0 ? (
             <div style={{ padding: '32px', background: '#161b22', borderRadius: '8px', color: '#8b949e', textAlign: 'center' }}>
@@ -213,6 +308,9 @@ export const CallInspector: React.FC<CallInspectorProps> = ({ call, onBack }) =>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {turns.map((turn, idx) => {
                 const hasBlock = Boolean(turn.ruleBlocked);
+                const isUserPlaying = playingState?.turnIdx === idx && playingState?.speaker === 'user';
+                const isAgentPlaying = playingState?.turnIdx === idx && playingState?.speaker === 'agent';
+
                 return (
                   <div
                     key={idx}
@@ -225,7 +323,7 @@ export const CallInspector: React.FC<CallInspectorProps> = ({ call, onBack }) =>
                   >
                     {/* Turn Header */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                         <span
                           style={{
                             background: '#21262d',
@@ -255,37 +353,51 @@ export const CallInspector: React.FC<CallInspectorProps> = ({ call, onBack }) =>
                           </span>
                         )}
 
-                        {hasBlock && (
-                          <span
-                            style={{
-                              background: 'rgba(248, 81, 73, 0.15)',
-                              color: '#f85149',
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              fontSize: '0.75rem',
-                              fontWeight: 600,
-                              border: '1px solid rgba(248, 81, 73, 0.3)',
-                            }}
-                          >
-                            🛡️ Guard Intercepted [{turn.ruleBlocked}]
-                          </span>
-                        )}
+                        {hasBlock && <ComplianceBadge blocked={true} rule={turn.ruleBlocked} />}
                       </div>
 
-                      {turn.latencyMs !== undefined && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#8b949e' }}>
-                          <span>Latency:</span>
-                          <span style={{ color: turn.latencyMs > 500 ? '#f85149' : '#58a6ff', fontWeight: 600 }}>
-                            {turn.latencyMs.toFixed(1)}ms
-                          </span>
-                        </div>
-                      )}
+                      {turn.latencyMs !== undefined && <LatencyBadge latencyMs={turn.latencyMs} />}
                     </div>
 
                     {/* Caller Speech */}
                     {turn.userText !== undefined && (
-                      <div style={{ marginBottom: '12px', paddingLeft: '8px', borderLeft: '3px solid #30363d' }}>
-                        <div style={{ fontSize: '0.75rem', color: '#8b949e', marginBottom: '2px' }}>👤 Caller / Debtor</div>
+                      <div
+                        style={{
+                          marginBottom: '12px',
+                          padding: '8px',
+                          borderLeft: isUserPlaying ? '4px solid #58a6ff' : '3px solid #30363d',
+                          background: isUserPlaying ? 'rgba(56, 139, 253, 0.08)' : 'transparent',
+                          borderRadius: '4px',
+                          transition: 'all 0.2s ease',
+                          boxShadow: isUserPlaying ? '0 0 8px rgba(88, 166, 255, 0.25)' : 'none',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#8b949e' }}>👤 Caller / Debtor</div>
+                          {turn.userText && (
+                            <button
+                              onClick={() => {
+                                if (isUserPlaying) {
+                                  stopPlayback();
+                                } else {
+                                  playUtterance(turn.userText!, idx, 'user');
+                                }
+                              }}
+                              title="Play caller audio"
+                              style={{
+                                background: isUserPlaying ? 'rgba(56, 139, 253, 0.2)' : 'transparent',
+                                border: '1px solid #30363d',
+                                color: isUserPlaying ? '#58a6ff' : '#8b949e',
+                                cursor: 'pointer',
+                                fontSize: '0.72rem',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                              }}
+                            >
+                              {isUserPlaying ? '🔊 Playing...' : '▶ Audio'}
+                            </button>
+                          )}
+                        </div>
                         <div style={{ color: '#f0f6fc', fontSize: '0.95rem', lineHeight: '1.4' }}>
                           {turn.userText || <span style={{ color: '#8b949e', fontStyle: 'italic' }}>[Call initiated]</span>}
                         </div>
@@ -294,12 +406,45 @@ export const CallInspector: React.FC<CallInspectorProps> = ({ call, onBack }) =>
 
                     {/* Agent Speech & Guard Diff */}
                     {(turn.agentFinal || turn.agentAttempted) && (
-                      <div style={{ paddingLeft: '8px', borderLeft: `3px solid ${hasBlock ? '#d29922' : '#238636'}` }}>
-                        <div style={{ fontSize: '0.75rem', color: '#8b949e', marginBottom: '2px' }}>🤖 Agent Response</div>
+                      <div
+                        style={{
+                          padding: '8px',
+                          borderLeft: isAgentPlaying ? '4px solid #3fb950' : `3px solid ${hasBlock ? '#d29922' : '#238636'}`,
+                          background: isAgentPlaying ? 'rgba(63, 185, 80, 0.08)' : 'transparent',
+                          borderRadius: '4px',
+                          transition: 'all 0.2s ease',
+                          boxShadow: isAgentPlaying ? '0 0 8px rgba(63, 185, 80, 0.25)' : 'none',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#8b949e' }}>🤖 Agent Response</div>
+                          <button
+                            onClick={() => {
+                              const agentText = turn.agentFinal || turn.agentAttempted || '';
+                              if (isAgentPlaying) {
+                                stopPlayback();
+                              } else if (agentText) {
+                                playUtterance(agentText, idx, 'agent');
+                              }
+                            }}
+                            title="Play agent audio"
+                            style={{
+                              background: isAgentPlaying ? 'rgba(63, 185, 80, 0.2)' : 'transparent',
+                              border: '1px solid #30363d',
+                              color: isAgentPlaying ? '#3fb950' : '#8b949e',
+                              cursor: 'pointer',
+                              fontSize: '0.72rem',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                            }}
+                          >
+                            {isAgentPlaying ? '🔊 Playing...' : '▶ Audio'}
+                          </button>
+                        </div>
 
                         {/* Guard Diff: Attempted vs Final */}
                         {hasBlock && turn.agentAttempted && turn.agentAttempted !== turn.agentFinal ? (
-                          <div style={{ marginBottom: '8px' }}>
+                          <div style={{ marginBottom: '8px', marginTop: '4px' }}>
                             <div
                               style={{
                                 padding: '8px 12px',
@@ -330,7 +475,7 @@ export const CallInspector: React.FC<CallInspectorProps> = ({ call, onBack }) =>
                             </div>
                           </div>
                         ) : (
-                          <div style={{ color: '#e6edf3', fontSize: '0.95rem', lineHeight: '1.4' }}>
+                          <div style={{ color: '#e6edf3', fontSize: '0.95rem', lineHeight: '1.4', marginTop: '4px' }}>
                             {turn.agentFinal || turn.agentAttempted}
                           </div>
                         )}
