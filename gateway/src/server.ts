@@ -5,17 +5,21 @@ import { SessionManager, Session } from './Session';
 import { forwardAudioFrame } from './backpressure';
 import { createSTTConnection, STTMessage } from './routes/sttClient';
 import { MTClient } from './routes/mtClient';
+import { AgentClient } from './routes/agentClient';
 import { metrics } from './metrics';
 
 dotenv.config();
 
 const PORT = parseInt(process.env.GATEWAY_PORT || process.env.PORT || '8443', 10);
 const HOST = process.env.GATEWAY_HOST || '0.0.0.0';
+const DEFAULT_MODE = (process.env.GATEWAY_MODE || process.env.MODE || 'translate') as 'translate' | 'agent';
 const STT_URL = process.env.STT_SERVICE_URL || 'ws://localhost:8001/stream';
 const MT_URL = process.env.MT_SERVICE_URL || 'http://localhost:8002/translate';
+const AGENT_URL = process.env.AGENT_SERVICE_URL || 'http://localhost:8003/turn';
 
 const sessionManager = new SessionManager();
 const mtClient = new MTClient(MT_URL);
+const agentClient = new AgentClient(AGENT_URL);
 
 // HTTP Server for metrics and health
 const server = http.createServer(async (req, res) => {
@@ -51,10 +55,10 @@ server.on('upgrade', (request, socket, head) => {
 
 wss.on('connection', (clientWs: WebSocket) => {
   const sessionId = `s_${Math.random().toString(36).substring(2, 9)}`;
-  const session = sessionManager.create(sessionId, clientWs);
+  const session = sessionManager.create(sessionId, clientWs, DEFAULT_MODE);
   metrics.activeSessions.inc();
 
-  console.log(`[Gateway] Session connected: ${sessionId}`);
+  console.log(`[Gateway] Session connected: ${sessionId} (mode: ${session.mode})`);
 
   // Safe JSON sender
   const sendJson = (ws: WebSocket, obj: unknown) => {
@@ -88,44 +92,82 @@ wss.on('connection', (clientWs: WebSocket) => {
           // Forward final transcript to client immediately
           sendJson(clientWs, { ...sttMsg, tFinal });
 
-          // Asynchronously dispatch translation to stateless MT service
           if (sttMsg.text && sttMsg.uttId !== undefined) {
             const currentUttId = sttMsg.uttId;
             const currentText = sttMsg.text;
 
-            const res = await mtClient.translate({
-              uttId: currentUttId,
-              text: currentText,
-              srcLang: session.srcLang,
-              tgtLang: session.tgtLang,
-              context: session.contextWindow.slice(-3),
-            });
+            if (session.mode === 'agent') {
+              const res = await agentClient.turn({
+                sessionId: session.id,
+                uttId: currentUttId,
+                text: currentText,
+                tCaptureMs: sttMsg.tCapture,
+                context: session.contextWindow.slice(-5),
+              });
 
-            const tTranslated = Date.now();
-            const mtLatSec = (tTranslated - tFinal) / 1000;
-            metrics.e2eLatency.observe({ boundary: 'final_to_translated' }, mtLatSec);
+              const tAgentDone = Date.now();
+              const agentLatSec = (tAgentDone - tFinal) / 1000;
+              metrics.e2eLatency.observe({ boundary: 'final_to_agent' }, agentLatSec);
 
-            if (res && res.translation) {
-              session.contextWindow.push(currentText);
-              // Bound context window
-              if (session.contextWindow.length > 5) {
-                session.contextWindow.shift();
+              if (res) {
+                session.contextWindow.push(`Caller: ${currentText}`);
+                session.contextWindow.push(`Agent: ${res.text}`);
+                if (session.contextWindow.length > 10) {
+                  session.contextWindow = session.contextWindow.slice(-10);
+                }
+
+                sendJson(clientWs, {
+                  type: 'agent_text',
+                  sessionId: session.id,
+                  uttId: currentUttId,
+                  text: res.text,
+                  events: res.events,
+                  metrics: res.metrics,
+                  tEmit: tAgentDone,
+                });
+              } else {
+                sendJson(clientWs, {
+                  type: 'error',
+                  code: 'AGENT_UNAVAILABLE',
+                  uttId: currentUttId,
+                });
               }
-
-              sendJson(clientWs, {
-                type: 'translated',
-                uttId: currentUttId,
-                translation: res.translation,
-                ttftMs: res.ttft_ms,
-                decodeMs: res.decode_ms,
-                tTranslated,
-              });
             } else {
-              sendJson(clientWs, {
-                type: 'error',
-                code: 'MT_UNAVAILABLE',
+              // Asynchronously dispatch translation to stateless MT service
+              const res = await mtClient.translate({
                 uttId: currentUttId,
+                text: currentText,
+                srcLang: session.srcLang,
+                tgtLang: session.tgtLang,
+                context: session.contextWindow.slice(-3),
               });
+
+              const tTranslated = Date.now();
+              const mtLatSec = (tTranslated - tFinal) / 1000;
+              metrics.e2eLatency.observe({ boundary: 'final_to_translated' }, mtLatSec);
+
+              if (res && res.translation) {
+                session.contextWindow.push(currentText);
+                // Bound context window
+                if (session.contextWindow.length > 5) {
+                  session.contextWindow.shift();
+                }
+
+                sendJson(clientWs, {
+                  type: 'translated',
+                  uttId: currentUttId,
+                  translation: res.translation,
+                  ttftMs: res.ttft_ms,
+                  decodeMs: res.decode_ms,
+                  tTranslated,
+                });
+              } else {
+                sendJson(clientWs, {
+                  type: 'error',
+                  code: 'MT_UNAVAILABLE',
+                  uttId: currentUttId,
+                });
+              }
             }
           }
         }
@@ -165,9 +207,12 @@ wss.on('connection', (clientWs: WebSocket) => {
           session.srcLang = msg.srcLang || 'ja';
           session.tgtLang = msg.tgtLang || 'en';
           session.sampleRate = msg.sampleRate || 16000;
+          if (msg.mode) {
+            session.mode = msg.mode;
+          }
           session.isStarted = true;
           connectSTT();
-          sendJson(clientWs, { type: 'started', sessionId });
+          sendJson(clientWs, { type: 'started', sessionId, mode: session.mode });
         } else if (msg.type === 'stop') {
           session.isStarted = false;
           if (session.sttWs && session.sttWs.readyState === WebSocket.OPEN) {

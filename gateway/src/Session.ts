@@ -7,6 +7,7 @@ export interface Session {
   sttWs?: WebSocket;
   srcLang: string;
   tgtLang: string;
+  mode: 'translate' | 'agent';
   sampleRate: number;
   contextWindow: string[]; // last N committed translations' source sentences
   audioSeq: number;
@@ -19,12 +20,13 @@ export interface Session {
 export class SessionManager {
   private sessions = new Map<string, Session>();
 
-  create(id: string, clientWs: WebSocket): Session {
+  create(id: string, clientWs: WebSocket, defaultMode: 'translate' | 'agent' = 'translate'): Session {
     const session: Session = {
       id,
       clientWs,
       srcLang: 'ja',
       tgtLang: 'en',
+      mode: defaultMode,
       sampleRate: 16000,
       contextWindow: [],
       audioSeq: 0,

@@ -50,6 +50,9 @@ export interface HUDMessage {
   queueDepth: number;
   gpuUtil: number;
   rtf: number;
+  agentTurnLatencyMs?: number;
+  ttsFirstAudioMs?: number;
+  e2eAgentLatencyMs?: number;
 }
 
 export interface ErrorMessage {
@@ -64,16 +67,100 @@ export interface StartControlMessage {
   srcLang: string;
   tgtLang: string;
   sampleRate: number;
+  mode?: 'translate' | 'agent';
 }
 
 export interface StopControlMessage {
   type: 'stop';
 }
 
+// Brain Contract (M1)
+export type BrainEventType =
+  | 'state_change'
+  | 'tool_call'
+  | 'compliance_block'
+  | 'escalate'
+  | 'identity_verified'
+  | 'promise_to_pay'
+  | 'stop_contact'
+  | 'end_call';
+
+export interface BrainEvent {
+  type: BrainEventType;
+  payload: Record<string, any>;
+  ts: number;
+}
+
+export interface BrainMetrics {
+  llmMs: number;
+  ttftMs?: number;
+  tokensIn: number;
+  tokensOut: number;
+  model: string;
+}
+
+export interface BrainRequest {
+  sessionId: string;
+  uttId: number;
+  text: string;
+  tCaptureMs?: number;
+  config?: Record<string, any>;
+  context?: string[];
+}
+
+export interface BrainResponse {
+  text: string;
+  events: BrainEvent[];
+  metrics: BrainMetrics;
+}
+
+// Agent streaming and voice message types
+export interface AgentTextMessage {
+  type: 'agent_text';
+  sessionId: string;
+  uttId: number;
+  text: string;
+  events: BrainEvent[];
+  metrics: BrainMetrics;
+  tEmit: number;
+}
+
+export interface AgentAudioChunkMessage {
+  type: 'agent_audio_chunk';
+  uttId: number;
+  seq: number;
+  pcm16Base64: string;
+  tEmit: number;
+}
+
+export interface AgentSpeechStartMessage {
+  type: 'agent_speech_start';
+  uttId: number;
+  tStart: number;
+}
+
+export interface AgentSpeechEndMessage {
+  type: 'agent_speech_end';
+  uttId: number;
+  tEnd: number;
+}
+
+export interface InterruptMessage {
+  type: 'interrupt';
+  uttId?: number;
+  tInterrupt: number;
+  reason?: string;
+}
+
 export type GatewayMessage =
   | PartialMessage
   | FinalMessage
   | TranslatedMessage
+  | AgentTextMessage
+  | AgentAudioChunkMessage
+  | AgentSpeechStartMessage
+  | AgentSpeechEndMessage
+  | InterruptMessage
   | HUDMessage
   | ErrorMessage;
 

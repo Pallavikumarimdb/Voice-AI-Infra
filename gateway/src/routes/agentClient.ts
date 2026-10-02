@@ -1,0 +1,41 @@
+import { metrics } from '../metrics';
+import { BrainRequest, BrainResponse } from '@voice/protocol';
+
+export class AgentClient {
+  private serviceUrl: string;
+  private timeoutMs: number;
+
+  constructor(
+    serviceUrl: string = process.env.AGENT_SERVICE_URL || 'http://localhost:8003/turn',
+    timeoutMs = 10000
+  ) {
+    this.serviceUrl = serviceUrl;
+    this.timeoutMs = timeoutMs;
+  }
+
+  async turn(req: BrainRequest): Promise<BrainResponse | null> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    try {
+      const response = await fetch(this.serviceUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Agent service returned status ${response.status}: ${response.statusText}`);
+      }
+
+      const data = (await response.json()) as BrainResponse;
+      return data;
+    } catch (err: any) {
+      console.error(`[AgentClient] Error communicating with Agent service for session ${req.sessionId}:`, err?.message || err);
+      return null;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+}
