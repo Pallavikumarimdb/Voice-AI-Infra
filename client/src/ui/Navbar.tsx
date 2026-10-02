@@ -54,9 +54,9 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onSelectTab, isSample
             </div>
             <div>
               <div style={{ color: '#fff', fontWeight: 700, fontSize: 14, letterSpacing: '-0.01em', lineHeight: 1.1 }}>
-                Vocalis
+                Voicebench
               </div>
-              <div style={{ fontSize: 11, color: '#667085' }}>Voice infrastructure</div>
+              <div style={{ fontSize: 11, color: '#667085' }}>Voice agent benchmark</div>
             </div>
           </div>
         </div>
@@ -112,7 +112,7 @@ export const Topbar: React.FC<{ activeTab: ActiveTab; isSampleData: boolean; onH
   return (
     <div className="topbar">
       <button onClick={onHome} className="btn btn-sm" style={{ padding: '4px 10px' }}>
-        Vocalis
+        Voicebench
       </button>
       <span className="topbar-crumb">
         {t.crumb} <span style={{ margin: '0 4px' }}>/</span>
