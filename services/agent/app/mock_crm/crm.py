@@ -81,6 +81,7 @@ class MockCRM:
             or clean_stated_extra in actual_kana
         )
 
-        return dob_match and extra_match
+        # [H1] Always evaluate both conditions before returning to avoid timing side-channel
+        return bool(dob_match) and bool(extra_match)
 
 crm = MockCRM()

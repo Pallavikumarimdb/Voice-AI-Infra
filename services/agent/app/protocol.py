@@ -3,8 +3,9 @@ Brain contract protocol definitions for services/agent.
 Matches packages/protocol/src/index.ts and packages/protocol/protocol.py.
 """
 
+import re
 from typing import Literal, Optional, Any, Dict, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 BrainEventType = Literal[
     "state_change",
@@ -35,10 +36,26 @@ class BrainMetrics(BaseModel):
 class BrainRequest(BaseModel):
     sessionId: str
     uttId: int
-    text: str
+    text: str = Field(..., max_length=2000)  # [H2] Prevent oversized payloads from exhausting LLM budget
     tCaptureMs: Optional[int] = None
     config: Optional[Dict[str, Any]] = None
     context: Optional[List[str]] = None
+
+    @field_validator('sessionId')
+    @classmethod
+    def validate_session_id(cls, v: str) -> str:
+        """[H3] Enforce safe session ID format to prevent path traversal downstream."""
+        if not re.match(r'^[a-zA-Z0-9_\-]{1,128}$', v):
+            raise ValueError('sessionId must match ^[a-zA-Z0-9_\\-]{1,128}$')
+        return v
+
+    @field_validator('context')
+    @classmethod
+    def validate_context(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        """[H2] Limit context window to prevent prompt stuffing."""
+        if v is not None:
+            return [item[:500] for item in v[:10]]
+        return v
 
 class BrainResponse(BaseModel):
     text: str

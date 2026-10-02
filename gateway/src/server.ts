@@ -1,4 +1,5 @@
 import http from 'http';
+import crypto from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import dotenv from 'dotenv';
 import { SessionManager, Session } from './Session';
@@ -19,6 +20,13 @@ const STT_URL = process.env.STT_SERVICE_URL || 'ws://localhost:8001/stream';
 const MT_URL = process.env.MT_SERVICE_URL || 'http://localhost:8002/translate';
 const AGENT_URL = process.env.AGENT_SERVICE_URL || 'http://localhost:8003/turn';
 const TTS_URL = process.env.TTS_SERVICE_URL || 'http://localhost:8004/synthesize';
+const MAX_SESSIONS = parseInt(process.env.MAX_SESSIONS || '500', 10);
+
+// [M2] Validate STT URL scheme at startup to catch misconfiguration early
+if (!STT_URL.startsWith('ws://') && !STT_URL.startsWith('wss://')) {
+  console.error(`[Gateway] FATAL: STT_SERVICE_URL must use ws:// or wss:// scheme. Got: ${STT_URL}`);
+  process.exit(1);
+}
 
 const sessionManager = new SessionManager();
 const mtClient = new MTClient(MT_URL);
@@ -65,7 +73,15 @@ server.on('upgrade', (request, socket, head) => {
 });
 
 wss.on('connection', (clientWs: WebSocket) => {
-  const sessionId = `s_${Math.random().toString(36).substring(2, 9)}`;
+  // [C2] Enforce hard max session cap to prevent DoS / memory exhaustion
+  if (sessionManager.getAll().length >= MAX_SESSIONS) {
+    clientWs.send(JSON.stringify({ type: 'error', code: 'SERVER_FULL', message: 'Max concurrent sessions reached' }));
+    clientWs.close(1013, 'Server full');
+    return;
+  }
+
+  // [C1] Use cryptographically random session ID instead of Math.random()
+  const sessionId = `s_${crypto.randomBytes(12).toString('hex')}`;
   const session = sessionManager.create(sessionId, clientWs, DEFAULT_MODE);
   metrics.activeSessions.inc();
 
@@ -297,8 +313,17 @@ wss.on('connection', (clientWs: WebSocket) => {
           if (msg.mode) {
             session.mode = msg.mode;
           }
-          if (msg.config) {
-            session.config = msg.config;
+          // [H4] Validate and sanitize agent config before storing — prevents prompt injection via config channel
+          if (msg.config && typeof msg.config === 'object') {
+            const ALLOWED_DOMAINS = ['collections', 'screening', 'kyc', 'custom'];
+            const MAX_STR_LEN = 4000;
+            const rawCfg = msg.config as Record<string, unknown>;
+            session.config = {
+              domain: ALLOWED_DOMAINS.includes(String(rawCfg.domain || '')) ? String(rawCfg.domain) : 'collections',
+              instructions: typeof rawCfg.instructions === 'string' ? rawCfg.instructions.slice(0, MAX_STR_LEN) : '',
+              greeting: typeof rawCfg.greeting === 'string' ? rawCfg.greeting.slice(0, 500) : '',
+              context: rawCfg.context && typeof rawCfg.context === 'object' ? rawCfg.context : {},
+            };
           }
           session.isStarted = true;
           connectSTT();
@@ -343,6 +368,28 @@ setInterval(() => {
     }
   }
 }, 1000);
+
+// [M1] Idle session reaper: close sessions that have been silent beyond the timeout
+const SESSION_IDLE_TIMEOUT_MS = parseInt(process.env.SESSION_IDLE_TIMEOUT_MS || '1800000', 10); // 30 min
+setInterval(() => {
+  const now = Date.now();
+  const idleSessions = sessionManager.getAll().filter(
+    (s) => now - s.lastActivityAt > SESSION_IDLE_TIMEOUT_MS
+  );
+  for (const s of idleSessions) {
+    console.log(`[Gateway] Reaping idle session ${s.id} (idle ${Math.round((now - s.lastActivityAt) / 1000)}s)`);
+    if (s.sttWs && s.sttWs.readyState === WebSocket.OPEN) {
+      s.sttWs.close();
+    }
+    if (s.clientWs.readyState === WebSocket.OPEN) {
+      s.clientWs.send(JSON.stringify({ type: 'error', code: 'SESSION_IDLE_TIMEOUT' }));
+      s.clientWs.close(1001, 'Idle timeout');
+    }
+    sessionManager.remove(s.id);
+    metrics.activeSessions.dec();
+  }
+}, 60_000); // Check every minute
+
 
 server.listen(PORT, HOST, () => {
   console.log(`[Gateway] Server running on http://${HOST}:${PORT}`);

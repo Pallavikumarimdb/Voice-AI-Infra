@@ -29,6 +29,9 @@ const LABELING_DIR = path.resolve(REPO_ROOT, 'eval/agent/labeling');
 // Whitelisted directories to prevent path traversal
 const ALLOWED_DIRS = [AUDIT_DIR, RESULTS_DIR, PERSONAS_DIR, LABELING_DIR];
 
+// [C3] Restrict CORS origin; configurable via env, never wildcard in production
+const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+
 export function isPathSafe(filePath: string): boolean {
   const resolved = path.resolve(filePath);
   return ALLOWED_DIRS.some((dir) => resolved.startsWith(dir) && !resolved.includes('..'));
@@ -41,9 +44,10 @@ export function isValidId(id: string): boolean {
 function sendJson(res: http.ServerResponse, status: number, data: any) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': CORS_ORIGIN,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    'Vary': 'Origin',
   });
   res.end(JSON.stringify(data));
 }
@@ -82,9 +86,10 @@ export async function handleDataApi(
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': CORS_ORIGIN,
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
+      'Vary': 'Origin',
     });
     res.end();
     return true;
@@ -203,9 +208,10 @@ export async function handleDataApi(
 
     // If personaId found, read persona YAML
     let persona: any = null;
-    if (personaId) {
+    // [C6] Validate personaId before using it in a file path
+    if (personaId && isValidId(personaId)) {
       const personaPath = path.join(PERSONAS_DIR, `${personaId}.yaml`);
-      if (fs.existsSync(personaPath)) {
+      if (isPathSafe(personaPath) && fs.existsSync(personaPath)) {
         persona = {
           id: personaId,
           content: fs.readFileSync(personaPath, 'utf-8'),
@@ -346,6 +352,27 @@ export async function handleDataApi(
           return true;
         }
 
+        // [M5] Validate that transcript_id and persona_id match safe patterns
+        if (!isValidId(String(transcript_id)) || !isValidId(String(persona_id))) {
+          sendJson(res, 400, { error: 'Invalid transcript_id or persona_id format' });
+          return true;
+        }
+
+        // [M5] Validate numeric score fields are integers in [1, 5]
+        const scoreFields = [
+          human_listening_score, human_pacing_score, human_recovery_score,
+          human_negotiation_score, human_confirmation_score, human_escalation_score,
+        ];
+        for (const score of scoreFields) {
+          if (score !== undefined && score !== '') {
+            const n = Number(score);
+            if (!Number.isInteger(n) || n < 1 || n > 5) {
+              sendJson(res, 400, { error: `Score values must be integers between 1 and 5` });
+              return true;
+            }
+          }
+        }
+
         // Initialize human_labels.csv if it does not exist
         if (!fs.existsSync(targetCsv)) {
           const header = fs.existsSync(templateCsv)
@@ -354,8 +381,11 @@ export async function handleDataApi(
           fs.writeFileSync(targetCsv, header + '\n', 'utf-8');
         }
 
+        // [M5] Strip CSV formula injection prefixes and escape for CSV safe writing
         const escapeVal = (v: any) => {
-          const str = String(v ?? '');
+          let str = String(v ?? '');
+          // Strip formula injection characters (=, +, -, @) from start of string
+          str = str.replace(/^[=+\-@]+/, '');
           return str.includes(',') || str.includes('"') || str.includes('\n')
             ? `"${str.replace(/"/g, '""')}"`
             : str;
@@ -380,7 +410,8 @@ export async function handleDataApi(
         sendJson(res, 201, { status: 'ok', appendedRow: row });
         return true;
       } catch (err: any) {
-        sendJson(res, 500, { error: err.message });
+        console.error('[DataAPI POST /api/labels] Internal error:', err);
+        sendJson(res, 500, { error: 'Internal server error' });
         return true;
       }
     }

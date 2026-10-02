@@ -1,0 +1,40 @@
+﻿# [H5] Prevent sensitive runtime data from leaking into Docker images
+
+# Environment secrets
+.env
+.env.local
+.env.*.local
+
+# LLM response cache - must NEVER be in a container image or web-accessible path
+services/agent/.llm_cache/
+
+# Audit logs - contain PII-adjacent session data
+services/agent/audit_logs/
+
+# Node dependencies (reinstalled in image)
+node_modules/
+*/node_modules/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyc
+.venv/
+venv/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Dev/test artifacts
+.git/
+.github/
+docs/
+eval/agent/results/
+*.log
+*.sqlite
+*.mp3
+*.pt
+*.bin
+*.onnx

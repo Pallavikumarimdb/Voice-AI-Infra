@@ -4,6 +4,7 @@ All tools enforce precondition checks deterministically and return structured re
 """
 
 from typing import Dict, Any, Optional
+from datetime import date
 from .mock_crm.crm import crm
 
 class ToolError(Exception):
@@ -80,6 +81,15 @@ def record_promise(session_state: Dict[str, Any], amount: int, payment_date: str
 
     if amount <= 0:
         return {"success": False, "error_code": "INVALID_AMOUNT", "message": "Promise amount must be positive"}
+
+    # [H8] Validate payment_date is a real ISO date (YYYY-MM-DD)
+    try:
+        parsed_date = date.fromisoformat(payment_date)
+        # Sanity check: must be in the future
+        if parsed_date <= date.today():
+            return {"success": False, "error_code": "INVALID_DATE", "message": "Payment date must be a future date"}
+    except (ValueError, TypeError):
+        return {"success": False, "error_code": "INVALID_DATE", "message": "payment_date must be in YYYY-MM-DD format"}
 
     return {
         "success": True,

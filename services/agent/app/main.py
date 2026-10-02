@@ -8,7 +8,9 @@ Endpoints:
 - GET /healthz: Service health check
 """
 
+import os
 import time
+import threading
 from typing import Dict, Any, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import PlainTextResponse
@@ -60,8 +62,27 @@ AGENT_LLM_TOKENS_TOTAL = Counter(
     ["direction"]
 )
 
-# Active session states (in-memory registry or checkpoint store)
+# Active session states (in-memory registry)
 sessions: Dict[str, Dict[str, Any]] = {}
+
+# [C4 / M1] Session limits and TTL reaper
+MAX_SESSIONS = int(os.environ.get('MAX_AGENT_SESSIONS', 500))
+SESSION_TTL_MS = int(os.environ.get('AGENT_SESSION_TTL_MS', 3_600_000))  # Default: 1 hour
+
+def _reap_expired_sessions():
+    """Background thread: removes sessions older than SESSION_TTL_MS."""
+    while True:
+        time.sleep(300)  # Run every 5 minutes
+        now_ms = int(time.time() * 1000)
+        expired = [
+            sid for sid, s in list(sessions.items())
+            if now_ms - s.get('createdAt', now_ms) > SESSION_TTL_MS
+        ]
+        for sid in expired:
+            sessions.pop(sid, None)
+
+_reaper_thread = threading.Thread(target=_reap_expired_sessions, daemon=True)
+_reaper_thread.start()
 
 @app.get("/healthz")
 async def healthz():
@@ -73,6 +94,10 @@ async def metrics():
 
 @app.post("/session/start")
 async def session_start(payload: Dict[str, Any]):
+    # [C4] Enforce session cap
+    if len(sessions) >= MAX_SESSIONS:
+        raise HTTPException(status_code=429, detail="Max concurrent sessions reached")
+
     session_id = payload.get("sessionId", f"s_{int(time.time()*1000)}")
     debtor_id = payload.get("debtorId", "deb_001")
     variant = payload.get("variant", "v2_graph")
@@ -123,6 +148,9 @@ async def turn(req: BrainRequest) -> BrainResponse:
 
     # Track or get session
     if req.sessionId not in sessions:
+        # [C4] Enforce session cap on ad-hoc session creation
+        if len(sessions) >= MAX_SESSIONS:
+            raise HTTPException(status_code=429, detail="Max concurrent sessions reached")
         # Initialize ad-hoc session
         audit_logger = AuditLogger(req.sessionId)
         initial_state: CallState = {

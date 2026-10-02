@@ -142,6 +142,11 @@ class ComplianceGuard:
         Post-LLM validation before sending text to debtor.
         Returns None if compliant, or (violation_code, fallback_utterance) if blocked.
         """
+        # [H6] Guard against excessively large LLM outputs that would hang regex engine
+        MAX_TEXT_LEN = 4000
+        if len(proposed_text) > MAX_TEXT_LEN:
+            proposed_text = proposed_text[:MAX_TEXT_LEN]
+
         # 1. Forbidden content check
         for pattern, rule_code in self.forbidden_patterns:
             if pattern.search(proposed_text):

@@ -4,12 +4,24 @@ Guarantees non-repudiation and tamper-evident logging for compliance audits.
 """
 
 import os
+import re
 import json
 import hashlib
 import time
 from typing import Dict, Any, Optional, Tuple
 
 DEFAULT_AUDIT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "audit_logs"))
+
+# [C5] Safe session ID pattern: alphanumeric, hyphens, underscores only, max 128 chars
+_SAFE_SESSION_ID_RE = re.compile(r'^[a-zA-Z0-9_\-]{1,128}$')
+
+def _sanitize_session_id(session_id: str) -> str:
+    """Raises ValueError if session_id is not safe for use as a filename."""
+    if not _SAFE_SESSION_ID_RE.match(session_id):
+        raise ValueError(
+            f"Invalid session_id '{session_id}': must match ^[a-zA-Z0-9_\\-]{{1,128}}$"
+        )
+    return session_id
 
 def compute_hash(data: Dict[str, Any]) -> str:
     """Computes SHA-256 over canonical JSON string (sorted keys, no extra spaces)."""
@@ -18,6 +30,7 @@ def compute_hash(data: Dict[str, Any]) -> str:
 
 class AuditLogger:
     def __init__(self, session_id: str, log_dir: Optional[str] = None):
+        session_id = _sanitize_session_id(session_id)  # [C5] Reject unsafe IDs immediately
         self.session_id = session_id
         self.log_dir = log_dir or DEFAULT_AUDIT_DIR
         os.makedirs(self.log_dir, exist_ok=True)
@@ -33,7 +46,9 @@ class AuditLogger:
                 lines = [line.strip() for line in f if line.strip()]
                 if lines:
                     last_entry = json.loads(lines[-1])
-                    self.entry_index = last_entry.get("seq", len(lines))
+                    # [L1] Always use actual line count as the canonical sequence counter
+                    # to prevent a tampered `seq` field from resetting or skipping entries
+                    self.entry_index = len(lines)
                     self.last_hash = last_entry.get("hash", "GENESIS")
 
     def append(self, stage: str, payload: Dict[str, Any]) -> Dict[str, Any]:
