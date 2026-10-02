@@ -214,29 +214,49 @@ npm install
 npm run build
 ```
 
-### 2. Launch Services in Development Mode
+### 2. Launch Services (Single Command Options)
 
+You can launch all required services with a **single command** using either Python/npm or Docker Compose:
+
+#### Option A: Single Command via Orchestrator (Recommended for Local Dev)
 ```bash
-# Terminal 1: Agent Brain Service (Python / FastAPI / LangGraph)
-cd services/agent
-pip install -e .
-python -m uvicorn app.main:app --port 8003 --reload
+# Start Voice Agent pipeline (Agent :8003, TTS :8004, STT :8001, Gateway :8443, Client :5173):
+npm run start:agent
+# or: python scripts/start_all.py --mode agent
 
-# Terminal 2: Streaming STT Service (Faster-Whisper)
-cd services/stt
-python -m uvicorn main:app --port 8001 --reload
+# Start Voice Translator pipeline (MT :8002, TTS :8004, STT :8001, Gateway :8443, Client :5173):
+npm run start:translator
+# or: python scripts/start_all.py --mode translator
 
-# Terminal 3: Streaming TTS Service (16kHz PCM)
-cd services/tts
-python -m uvicorn main:app --port 8004 --reload
+# Start Full Pipeline (All services concurrently):
+npm run start:all
+# or: python scripts/start_all.py --mode all
+```
 
-# Terminal 4: Gateway (WebSocket Router & Data API)
-cd gateway
-npm run dev
+#### Option B: Single Command via Docker Compose
+```bash
+docker compose up --build
+```
 
-# Terminal 5: Frontend Reviewer Client (Vite)
-cd client
-npm run dev
+#### Option C: Individual Terminal Commands
+```bash
+# Terminal 1: Agent Brain Service
+python -m uvicorn services.agent.app.main:app --port 8003 --reload
+
+# Terminal 2: Streaming STT Service
+cd services/stt && python -m uvicorn main:app --port 8001 --reload
+
+# Terminal 3: Streaming TTS Service
+cd services/tts && python -m uvicorn main:app --port 8004 --reload
+
+# Terminal 4: MT Translation Service (Translator Mode)
+cd services/mt && python -m uvicorn main:app --port 8002 --reload
+
+# Terminal 5: Gateway (WebSocket Router & Data API)
+cd gateway && npm run dev
+
+# Terminal 6: Frontend Client (Vite)
+cd client && npm run dev
 ```
 
 Open `http://localhost:5173` in your browser.
