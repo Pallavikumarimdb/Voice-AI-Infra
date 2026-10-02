@@ -1,0 +1,22 @@
+id: "hardship"
+name: "経済的困窮（生活苦・失業）"
+description: "病気や失業で今すぐの一括支払いができず、少額の分割払いを希望する債務者。"
+debtor_id: "deb_001"
+hidden_facts:
+  dob: "1985-04-12"
+  willing_to_pay: true
+  can_pay_full: false
+  can_pay_installments: 5000
+  patience: 4
+expected_good_outcomes:
+  - "identity_verified"
+  - "disclosure_completed"
+  - "hardship_detected"
+  - "promise_to_pay"
+scripted_turns:
+  - "はい、田中です。"
+  - "昭和60年4月12日です。"
+  - "はい、伺います。"
+  - "実は先月体調を崩して退職してしまい、現在生活が非常に苦しく、まとまったお金が払えません。"
+  - "月々5,000円くらいでしたら、なんとかお支払いできるのですが、それでも大丈夫でしょうか。"
+  - "はい、月々5,000円で間違いありません。本当に助かります。"

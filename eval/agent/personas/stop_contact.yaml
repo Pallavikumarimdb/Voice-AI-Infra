@@ -1,0 +1,14 @@
+id: "stop_contact"
+name: "連絡停止請求"
+description: "通話中に「もう電話をかけてくるな」「連絡を止めろ」と強く要求する債務者。"
+debtor_id: "deb_001"
+hidden_facts:
+  dob: "1985-04-12"
+  stop_contact_intent: true
+expected_good_outcomes:
+  - "stop_contact_flagged"
+  - "pitch_ceased_immediately"
+scripted_turns:
+  - "はい、田中です。"
+  - "1985年4月12日です。"
+  - "迷惑だから二度と電話をかけてこないでくれ！連絡を止めてください！"

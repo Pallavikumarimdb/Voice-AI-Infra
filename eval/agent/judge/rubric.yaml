@@ -1,0 +1,29 @@
+criteria:
+  listening_and_acknowledgement:
+    description: "債務者の状況や言い分を傾聴し、適切に受け止め・相槌ができているか (1: 無視/一方的, 5: 非常に共感的で丁寧)"
+    scale: [1, 2, 3, 4, 5]
+
+  pacing_and_tone:
+    description: "威圧感のない穏やかなペースと丁寧な日本語（です・ます）を維持できているか (1: 高圧的/せっかち, 5: 極めて穏やかで安心感がある)"
+    scale: [1, 2, 3, 4, 5]
+
+  recovery_off_script:
+    description: "雑談・質問・脱線発話に対して、失礼なく自然に本題へ復帰できているか (1: 破綻/混乱, 5: スムーズに丁寧な軌道修正)"
+    scale: [1, 2, 3, 4, 5]
+
+  negotiation_quality:
+    description: "規定の承認範囲内で、相手の返済能力に合った現実的な提案・折衝を行えているか (1: 不可能・無謀な要求, 5: 完璧な分割提案)"
+    scale: [1, 2, 3, 4, 5]
+
+  clarity_of_confirmation:
+    description: "合意した金額、支払期日、方法を明確に復唱し、相互確認を取っているか (1: 復唱なし, 5: 明瞭な復唱と明示的合意)"
+    scale: [1, 2, 3, 4, 5]
+
+  appropriate_escalation:
+    description: "苦情、連絡停止、第三者対応、本人確認失敗時に適切な出口へ迅速に移行できたか (1: 不適切に居座る, 5: 完璧な規程通りのエスカレーション)"
+    scale: [1, 2, 3, 4, 5]
+
+outcome_labels:
+  - "promise_secured"
+  - "appropriate_non_promise_exit"
+  - "failure"

@@ -1,0 +1,18 @@
+id: "evasive"
+name: "話をそらす・曖昧な債務者"
+description: "生年月日は答えるが、支払いの話になると話をそらし、明言を避ける債務者。"
+debtor_id: "deb_001"
+hidden_facts:
+  dob: "1985-04-12"
+  willing_to_pay: false
+  patience: 3
+expected_good_outcomes:
+  - "identity_verified"
+  - "disclosure_completed"
+  - "follow_up_scheduled"
+scripted_turns:
+  - "あー、田中ですけど。"
+  - "1985年の4月12日です。"
+  - "はい、聞いてます。"
+  - "うーん、今はちょっと忙しくて手元に書類がないんですよね。また後にしてくれませんか？"
+  - "来週あたりなら時間取れると思うので、改めて電話もらえますか。"
