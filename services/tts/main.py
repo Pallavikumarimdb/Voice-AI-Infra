@@ -38,7 +38,8 @@ async def synthesize(req: SynthesizeRequest):
             import soundfile as sf
             from scipy import signal
 
-            voice = req.voice if req.voice.startswith("ja-") else "ja-JP-NanamiNeural"
+            ALLOWED_PREFIXES = ("ja-", "en-")
+            voice = req.voice if req.voice.startswith(ALLOWED_PREFIXES) else "ja-JP-NanamiNeural"
             communicate = edge_tts.Communicate(req.text, voice=voice)
             
             # Accumulate audio data

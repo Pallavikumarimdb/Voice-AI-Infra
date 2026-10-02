@@ -2,9 +2,16 @@ import { metrics } from '../metrics';
 
 export interface SynthesizeOptions {
   voice?: string;
+  language?: 'ja' | 'en';
   sampleRate?: number;
   abortSignal?: AbortSignal;
 }
+
+/** Map agent language codes to Azure Neural voices */
+export const LANGUAGE_VOICES: Record<string, string> = {
+  ja: 'ja-JP-NanamiNeural',
+  en: 'en-US-AriaNeural',
+};
 
 export class TTSClient {
   private serviceUrl: string;
@@ -28,7 +35,8 @@ export class TTSClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         text,
-        voice: options.voice || 'ja-JP-NanamiNeural',
+        // Resolve voice: explicit > language map > Japanese default
+        voice: options.voice || LANGUAGE_VOICES[options.language || 'ja'] || 'ja-JP-NanamiNeural',
         sample_rate: options.sampleRate || 16000
       }),
       signal: options.abortSignal

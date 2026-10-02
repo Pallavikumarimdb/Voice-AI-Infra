@@ -64,6 +64,7 @@ export interface ErrorMessage {
 
 export interface AgentConfig {
   domain?: 'collections' | 'screening' | 'kyc' | 'custom' | string;
+  language?: 'ja' | 'en';  // Voice agent language; defaults to 'ja' (Japanese)
   instructions?: string;
   greeting?: string;
   guardrails?: string[];

@@ -5,6 +5,7 @@ import { Captions, CaptionEntry } from './Captions';
 import { LatencyHUD } from './LatencyHUD';
 
 export type DomainType = 'collections' | 'screening' | 'kyc' | 'custom';
+export type AgentLanguage = 'ja' | 'en';
 
 interface DomainPreset {
   id: DomainType;
@@ -18,50 +19,98 @@ interface DomainPreset {
   guardrails: string[];
 }
 
-const DOMAIN_PRESETS: Record<DomainType, DomainPreset> = {
-  collections: {
-    id: 'collections',
-    title: 'Collections & AR',
-    badge: '💼 債権回収',
-    actionText: 'Start Call (債権回収)',
-    targetLabel: '山田 太郎 (Taro Yamada)',
-    contextDesc: 'Debt: ¥48,000 • Creditor: みらいファイナンス',
-    greeting: 'もしもし、山田太郎様のお電話でお間違いないでしょうか？私、みらい債権回収センターのAIオペレーターでございます。',
-    instructions: 'Maintain polite Japanese Keigo (です・ます). Strictly verify debtor identity with Date of Birth before disclosing amount. If debtor mentions financial hardship, offer structured installment plans up to 6 months.',
-    guardrails: ['DOB Verification Required', 'Calling Hours (08:00-21:00 JST)', 'Third-Party Disclosure Ban', 'Civility Filter']
+const DOMAIN_PRESETS: Record<AgentLanguage, Record<DomainType, DomainPreset>> = {
+  ja: {
+    collections: {
+      id: 'collections',
+      title: 'Collections & AR',
+      badge: '💼 債権回収',
+      actionText: 'Start Call (債権回収)',
+      targetLabel: '山田 太郎 (Taro Yamada)',
+      contextDesc: 'Debt: ¥48,000 • Creditor: みらいファイナンス',
+      greeting: 'もしもし、山田太郎様のお電話でお間違いないでしょうか？私、みらい債権回収センターのAIオペレーターでございます。',
+      instructions: 'Maintain polite Japanese Keigo (です・ます). Strictly verify debtor identity with Date of Birth before disclosing amount. If debtor mentions financial hardship, offer structured installment plans up to 6 months.',
+      guardrails: ['DOB Verification Required', 'Calling Hours (08:00-21:00 JST)', 'Third-Party Disclosure Ban', 'Civility Filter']
+    },
+    screening: {
+      id: 'screening',
+      title: 'Candidate Screening',
+      badge: '🎯 採用スクリーニング',
+      actionText: 'Start Call (採用選考)',
+      targetLabel: '佐藤 健一 (Kenichi Sato)',
+      contextDesc: 'Role: Senior Full-Stack Engineer • Level: Lead',
+      greeting: '佐藤様、本日は面談のお時間をいただきありがとうございます。AI採用アシスタントとして、ご経歴と転職のご希望条件について数点お伺いいたします。',
+      instructions: 'Conduct a professional, warm 5-minute first-round screening interview. Ask about: 1) Recent experience with React & distributed systems, 2) Preferred working model (remote vs hybrid), 3) Expected compensation range. Validate answers concisely.',
+      guardrails: ['Anti-Discrimination Guard', 'Salary Range Cap Check', 'Strict NDA & Privacy', 'Civility Filter']
+    },
+    kyc: {
+      id: 'kyc',
+      title: 'Customer KYC & Support',
+      badge: '🛡️ 本人確認・サポート',
+      actionText: 'Start Call (本人確認)',
+      targetLabel: '鈴木 一郎 (Ichiro Suzuki)',
+      contextDesc: 'Account: ACC-88219 • Security Tier: 2',
+      greeting: 'お電話ありがとうございます。カスタマーサポートAIでございます。お手続きの前にご本人様確認を実施させていただきます。',
+      instructions: 'Authenticate customer by confirming registered phone number and 4-digit security PIN. Assist with account inquiry once authenticated. Never reveal plaintext PIN or sensitive billing data unverified.',
+      guardrails: ['2-Factor PIN Authentication', 'PII Masking Guard', 'Fraud Suspicion Auto-Flag', 'Civility Filter']
+    },
+    custom: {
+      id: 'custom',
+      title: 'Custom Enterprise Agent',
+      badge: '⚡ カスタム',
+      actionText: 'Start Call (カスタムAI)',
+      targetLabel: 'Target Contact',
+      contextDesc: 'Custom Scenario & Enterprise Parameters',
+      greeting: 'お電話ありがとうございます。AIアシスタントでございます。どのようなご用件でしょうか。',
+      instructions: 'Act as a professional enterprise voice agent. Follow customer instructions, maintain high empathy, and protect customer data.',
+      guardrails: ['Custom Regulatory Guard', 'PII Protection', 'Civility Filter']
+    }
   },
-  screening: {
-    id: 'screening',
-    title: 'Candidate Screening',
-    badge: '🎯 採用スクリーニング',
-    actionText: 'Start Call (採用選考)',
-    targetLabel: '佐藤 健一 (Kenichi Sato)',
-    contextDesc: 'Role: Senior Full-Stack Engineer • Level: Lead',
-    greeting: '佐藤様、本日は面談のお時間をいただきありがとうございます。AI採用アシスタントとして、ご経歴と転職のご希望条件について数点お伺いいたします。',
-    instructions: 'Conduct a professional, warm 5-minute first-round screening interview. Ask about: 1) Recent experience with React & distributed systems, 2) Preferred working model (remote vs hybrid), 3) Expected compensation range. Validate answers concisely.',
-    guardrails: ['Anti-Discrimination Guard', 'Salary Range Cap Check', 'Strict NDA & Privacy', 'Civility Filter']
-  },
-  kyc: {
-    id: 'kyc',
-    title: 'Customer KYC & Support',
-    badge: '🛡️ 本人確認・サポート',
-    actionText: 'Start Call (本人確認)',
-    targetLabel: '鈴木 一郎 (Ichiro Suzuki)',
-    contextDesc: 'Account: ACC-88219 • Security Tier: 2',
-    greeting: 'お電話ありがとうございます。カスタマーサポートAIでございます。お手続きの前にご本人様確認を実施させていただきます。',
-    instructions: 'Authenticate customer by confirming registered phone number and 4-digit security PIN. Assist with account inquiry once authenticated. Never reveal plaintext PIN or sensitive billing data unverified.',
-    guardrails: ['2-Factor PIN Authentication', 'PII Masking Guard', 'Fraud Suspicion Auto-Flag', 'Civility Filter']
-  },
-  custom: {
-    id: 'custom',
-    title: 'Custom Enterprise Agent',
-    badge: '⚡ カスタム',
-    actionText: 'Start Call (カスタムAI)',
-    targetLabel: 'Target Contact',
-    contextDesc: 'Custom Scenario & Enterprise Parameters',
-    greeting: 'お電話ありがとうございます。AIアシスタントでございます。どのようなご用件でしょうか。',
-    instructions: 'Act as a professional enterprise voice agent. Follow customer instructions, maintain high empathy, and protect customer data.',
-    guardrails: ['Custom Regulatory Guard', 'PII Protection', 'Civility Filter']
+  en: {
+    collections: {
+      id: 'collections',
+      title: 'Collections & AR',
+      badge: '💼 Collections (AR)',
+      actionText: 'Start Call (Collections)',
+      targetLabel: 'Alex Johnson',
+      contextDesc: 'Balance: $350.00 • Creditor: Apex Capital Services',
+      greeting: 'Hello, this is Accounts Management calling for Alex Johnson. Am I speaking with Alex?',
+      instructions: 'Maintain professional, empathetic tone. Strictly verify identity before disclosing balance. Offer 3 to 6-month installment plans if hardship is mentioned.',
+      guardrails: ['FDCPA Compliance Verified', 'Calling Hours (08:00-21:00 Local)', 'Third-Party Disclosure Ban', 'Civility & Anti-Harassment']
+    },
+    screening: {
+      id: 'screening',
+      title: 'Candidate Screening',
+      badge: '🎯 Candidate Screening',
+      actionText: 'Start Call (Screening)',
+      targetLabel: 'Alex Johnson',
+      contextDesc: 'Role: Senior Software Engineer • Level: Lead',
+      greeting: 'Hello Alex, thank you for making time to speak today! I am your AI recruiting assistant conducting your first-round interview for the Senior Software Engineer position.',
+      instructions: 'Conduct a warm, professional 5-minute first-round interview. Inquire about: 1) System architecture & modern tech stacks, 2) Preferred work mode (remote/hybrid), 3) Expected salary range. Validate answers concisely.',
+      guardrails: ['Equal Opportunity / EEOC Guard', 'Compensation Fairness Cap', 'Strict NDA & Privacy', 'Civility Filter']
+    },
+    kyc: {
+      id: 'kyc',
+      title: 'Customer KYC & Support',
+      badge: '🛡️ Customer KYC & Support',
+      actionText: 'Start Call (KYC)',
+      targetLabel: 'John Smith',
+      contextDesc: 'Account: ACC-88219 • Security Tier: Level 2',
+      greeting: 'Thank you for calling Customer Support. I am your AI verification specialist. Am I speaking with John Smith?',
+      instructions: 'Authenticate customer by confirming registered phone number and 4-digit PIN. Assist with account inquiries once verified. Never disclose sensitive billing info unverified.',
+      guardrails: ['Two-Factor PIN Authentication', 'PII Data Masking', 'Suspicious Activity Detection', 'Civility Filter']
+    },
+    custom: {
+      id: 'custom',
+      title: 'Custom Enterprise Agent',
+      badge: '⚡ Custom Agent',
+      actionText: 'Start Call (Custom Agent)',
+      targetLabel: 'Target Contact',
+      contextDesc: 'Enterprise Custom Workflow',
+      greeting: 'Hello! Thank you for calling. I am your enterprise voice AI assistant. How may I assist you today?',
+      instructions: 'Act as a professional enterprise voice agent. Follow customer instructions, maintain high empathy, and protect customer data.',
+      guardrails: ['Enterprise Compliance Guard', 'PII Data Protection', 'Civility Filter']
+    }
   }
 };
 
@@ -81,13 +130,14 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
   const [error, setError] = useState<string | null>(null);
 
   // Dynamic Domain & Agent Configuration state
+  const [agentLanguage, setAgentLanguage] = useState<AgentLanguage>('ja');
   const [activeDomain, setActiveDomain] = useState<DomainType>('collections');
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [customGreeting, setCustomGreeting] = useState(DOMAIN_PRESETS.collections.greeting);
-  const [customInstructions, setCustomInstructions] = useState(DOMAIN_PRESETS.collections.instructions);
-  const [targetContext, setTargetContext] = useState(DOMAIN_PRESETS.collections.contextDesc);
-  const [targetSubject, setTargetSubject] = useState(DOMAIN_PRESETS.collections.targetLabel);
-  const [activeGuardrails, setActiveGuardrails] = useState<string[]>(DOMAIN_PRESETS.collections.guardrails);
+  const [customGreeting, setCustomGreeting] = useState(DOMAIN_PRESETS.ja.collections.greeting);
+  const [customInstructions, setCustomInstructions] = useState(DOMAIN_PRESETS.ja.collections.instructions);
+  const [targetContext, setTargetContext] = useState(DOMAIN_PRESETS.ja.collections.contextDesc);
+  const [targetSubject, setTargetSubject] = useState(DOMAIN_PRESETS.ja.collections.targetLabel);
+  const [activeGuardrails, setActiveGuardrails] = useState<string[]>(DOMAIN_PRESETS.ja.collections.guardrails);
 
   // Domain-specific state indicators
   const [callPhase, setCallPhase] = useState('greet');
@@ -114,7 +164,18 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
   // Handle switching preset
   const handleSelectDomain = (domain: DomainType) => {
     setActiveDomain(domain);
-    const preset = DOMAIN_PRESETS[domain];
+    const preset = DOMAIN_PRESETS[agentLanguage][domain];
+    setCustomGreeting(preset.greeting);
+    setCustomInstructions(preset.instructions);
+    setTargetContext(preset.contextDesc);
+    setTargetSubject(preset.targetLabel);
+    setActiveGuardrails(preset.guardrails);
+  };
+
+  // Handle switching language
+  const handleSelectLanguage = (lang: AgentLanguage) => {
+    setAgentLanguage(lang);
+    const preset = DOMAIN_PRESETS[lang][activeDomain];
     setCustomGreeting(preset.greeting);
     setCustomInstructions(preset.instructions);
     setTargetContext(preset.contextDesc);
@@ -279,6 +340,7 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
       // Prepare agent config
       const agentConfig: AgentConfig = {
         domain: activeDomain,
+        language: agentLanguage,
         instructions: customInstructions,
         greeting: customGreeting,
         guardrails: activeGuardrails,
@@ -287,17 +349,18 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
           contextDesc: targetContext,
           candidateName: targetSubject,
           customerName: targetSubject,
+          debtorName: targetSubject,
         }
       };
 
-      sessionManagerRef.current?.start('ja', 'ja', 'agent', agentConfig);
+      sessionManagerRef.current?.start(agentLanguage, agentLanguage, 'agent', agentConfig);
     } else {
       sessionManagerRef.current?.stop();
       setIsAgentSpeaking(false);
     }
   };
 
-  const currentPreset = DOMAIN_PRESETS[activeDomain];
+  const currentPreset = DOMAIN_PRESETS[agentLanguage][activeDomain];
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
@@ -348,32 +411,83 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
           </button>
         </div>
 
-        {/* Domain Presets Bar */}
-        <div style={{ padding: '12px 20px', display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', borderBottom: isConfigOpen ? '1px solid #21262d' : 'none' }}>
-          <span style={{ fontSize: '0.8rem', color: '#8b949e', marginRight: '6px' }}>Domain Preset:</span>
-          {(Object.keys(DOMAIN_PRESETS) as DomainType[]).map((dKey) => {
-            const preset = DOMAIN_PRESETS[dKey];
-            const isSelected = activeDomain === dKey;
-            return (
+        {/* Domain Presets & Voice Language Bar */}
+        <div style={{ padding: '12px 20px', display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', justifyContent: 'space-between', borderBottom: isConfigOpen ? '1px solid #21262d' : 'none' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.8rem', color: '#8b949e', marginRight: '6px' }}>Domain Preset:</span>
+            {(Object.keys(DOMAIN_PRESETS[agentLanguage]) as DomainType[]).map((dKey) => {
+              const preset = DOMAIN_PRESETS[agentLanguage][dKey];
+              const isSelected = activeDomain === dKey;
+              return (
+                <button
+                  key={dKey}
+                  onClick={() => handleSelectDomain(dKey)}
+                  disabled={state !== 'idle'}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '6px',
+                    border: isSelected ? '1px solid #1f6feb' : '1px solid #30363d',
+                    background: isSelected ? 'rgba(31, 111, 235, 0.15)' : '#21262d',
+                    color: isSelected ? '#58a6ff' : '#c9d1d9',
+                    cursor: state === 'idle' ? 'pointer' : 'not-allowed',
+                    fontSize: '0.85rem',
+                    fontWeight: isSelected ? 600 : 400,
+                  }}
+                >
+                  {preset.badge}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Voice Language Selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '0.8rem', color: '#8b949e' }}>Voice Language:</span>
+            <div style={{ display: 'inline-flex', background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px', padding: '2px' }}>
               <button
-                key={dKey}
-                onClick={() => handleSelectDomain(dKey)}
+                type="button"
+                onClick={() => handleSelectLanguage('ja')}
                 disabled={state !== 'idle'}
                 style={{
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  border: isSelected ? '1px solid #1f6feb' : '1px solid #30363d',
-                  background: isSelected ? 'rgba(31, 111, 235, 0.15)' : '#21262d',
-                  color: isSelected ? '#58a6ff' : '#c9d1d9',
+                  padding: '4px 10px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: agentLanguage === 'ja' ? '#1f6feb' : 'transparent',
+                  color: agentLanguage === 'ja' ? '#ffffff' : '#8b949e',
+                  fontWeight: agentLanguage === 'ja' ? 600 : 400,
                   cursor: state === 'idle' ? 'pointer' : 'not-allowed',
-                  fontSize: '0.85rem',
-                  fontWeight: isSelected ? 600 : 400,
+                  fontSize: '0.8rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
                 }}
               >
-                {preset.badge}
+                <span>🇯🇵</span>
+                <span>日本語</span>
               </button>
-            );
-          })}
+              <button
+                type="button"
+                onClick={() => handleSelectLanguage('en')}
+                disabled={state !== 'idle'}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: agentLanguage === 'en' ? '#238636' : 'transparent',
+                  color: agentLanguage === 'en' ? '#ffffff' : '#8b949e',
+                  fontWeight: agentLanguage === 'en' ? 600 : 400,
+                  cursor: state === 'idle' ? 'pointer' : 'not-allowed',
+                  fontSize: '0.8rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <span>🇺🇸</span>
+                <span>English</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Expandable Configuration Body */}

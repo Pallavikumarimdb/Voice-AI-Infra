@@ -79,3 +79,47 @@ def test_screening_turn_interaction():
     assert "佐藤 健一" in data["text"] or "採用" in data["text"]
     assert "events" in data
     assert any(e["payload"].get("domain") == "screening" for e in data["events"])
+
+def test_english_screening_turn_interaction():
+    session_id = "s_screening_en_001"
+    req_payload = {
+        "sessionId": session_id,
+        "uttId": 1,
+        "text": "Hello, I am ready for the interview.",
+        "tCaptureMs": 1700000000000,
+        "config": {
+            "domain": "screening",
+            "language": "en",
+            "instructions": "Screen candidate for Senior Engineer",
+            "context": {"candidateName": "Alex Johnson", "targetRole": "Senior Engineer"}
+        },
+        "context": []
+    }
+    resp = client.post("/turn", json=req_payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "Alex Johnson" in data["text"]
+    assert "Recruiting" in data["text"] or "interview" in data["text"]
+    assert any(e["payload"].get("language") == "en" for e in data["events"])
+
+def test_english_collections_turn_interaction():
+    session_id = "s_collections_en_001"
+    req_payload = {
+        "sessionId": session_id,
+        "uttId": 1,
+        "text": "Hello, speaking.",
+        "tCaptureMs": 1700000000000,
+        "config": {
+            "domain": "collections",
+            "language": "en",
+            "context": {"debtorName": "Alex Johnson"}
+        },
+        "context": []
+    }
+    resp = client.post("/turn", json=req_payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "Alex Johnson" in data["text"]
+    assert "Accounts Management" in data["text"]
+    assert any(e["payload"].get("language") == "en" for e in data["events"])
+

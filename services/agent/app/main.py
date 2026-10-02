@@ -188,14 +188,15 @@ async def turn(req: BrainRequest) -> BrainResponse:
     # Check for domain configuration
     cfg = req.config or session_data.get("config", {})
     domain = cfg.get("domain", "collections")
+    language = cfg.get("language", "ja")
 
     with AGENT_TURN_LATENCY.labels(stage="turn_total").time():
-        if domain in ["screening", "kyc", "custom"]:
+        if domain in ["screening", "kyc", "custom"] or (domain == "collections" and language == "en"):
             turn_result = generalized_agent.process_turn(
                 req.sessionId, req.text, state, config=cfg, audit_logger=audit_logger
             )
         else:
-            # Select engine for collections
+            # Select engine for Japanese collections
             if variant == "v1_baseline":
                 agent = baseline_agent
             elif variant == "v2_graph_no_slow_path":
