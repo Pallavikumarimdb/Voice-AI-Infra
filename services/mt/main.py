@@ -34,12 +34,19 @@ engine = MTEngine(
     max_num_seqs=int(os.getenv("MT_MAX_NUM_SEQS", "64"))
 )
 
+from pydantic import BaseModel, Field, field_validator
+
 class TranslateRequest(BaseModel):
-    uttId: int
-    text: str
-    srcLang: str = "ja"
-    tgtLang: str = "en"
-    context: list[str] = []
+    uttId: int = Field(..., ge=0)
+    text: str = Field(..., max_length=2000)
+    srcLang: str = Field("ja", pattern=r"^[a-zA-Z\-]{2,10}$")
+    tgtLang: str = Field("en", pattern=r"^[a-zA-Z\-]{2,10}$")
+    context: list[str] = Field(default_factory=list)
+
+    @field_validator("context")
+    @classmethod
+    def validate_context(cls, v: list[str]) -> list[str]:
+        return [item[:300] for item in (v or [])[:10]]
 
 class TranslateResponse(BaseModel):
     translation: str
@@ -95,4 +102,4 @@ async def translate(req: TranslateRequest):
     except Exception as e:
         TRANSLATIONS_TOTAL.labels(status="error").inc()
         print(f"[MT] Translation error for uttId {req.uttId}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Translation engine error")

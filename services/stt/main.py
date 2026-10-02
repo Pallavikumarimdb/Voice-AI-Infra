@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import struct
 import json
@@ -168,10 +169,23 @@ async def websocket_stream(websocket: WebSocket):
                     payload = json.loads(message["text"])
                     msg_type = payload.get("type")
                     if msg_type == "session_start":
-                        session.session_id = payload.get("sessionId", "s_default")
-                        session.src_lang = payload.get("srcLang", "ja")
-                        session.sample_rate = payload.get("sampleRate", 16000)
-                        print(f"[STT] Started session {session.session_id} (srcLang: {session.src_lang})")
+                        raw_sid = str(payload.get("sessionId", "s_default"))
+                        # Validate sessionId format (alphanumeric, dashes, underscores, max 128 chars)
+                        session.session_id = raw_sid if re.match(r'^[a-zA-Z0-9_\-]{1,128}$', raw_sid) else "s_default"
+
+                        # Validate srcLang against supported languages
+                        raw_lang = str(payload.get("srcLang", "ja")).lower().strip()
+                        ALLOWED_LANGUAGES = {"ja", "en", "zh", "ko", "es", "fr", "de", "it", "pt", "ru"}
+                        session.src_lang = raw_lang if raw_lang in ALLOWED_LANGUAGES else "ja"
+
+                        # Validate sampleRate: 8kHz - 48kHz
+                        try:
+                            sr = int(payload.get("sampleRate", 16000))
+                            session.sample_rate = sr if 8000 <= sr <= 48000 else 16000
+                        except (ValueError, TypeError):
+                            session.sample_rate = 16000
+
+                        print(f"[STT] Started session {session.session_id} (srcLang: {session.src_lang}, sampleRate: {session.sample_rate})")
                     elif msg_type == "session_stop":
                         # Flush any remaining audio
                         leftover = session.segmenter.force_finalize()

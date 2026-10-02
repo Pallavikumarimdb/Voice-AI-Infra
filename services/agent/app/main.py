@@ -16,7 +16,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import PlainTextResponse
 from prometheus_client import Histogram, Counter, generate_latest, CONTENT_TYPE_LATEST
 
-from .protocol import BrainRequest, BrainResponse, BrainEvent, BrainMetrics
+from .protocol import (
+    BrainRequest, BrainResponse, BrainEvent, BrainMetrics,
+    SessionStartRequest, SessionEndRequest
+)
 from .graph import CollectionsGraphAgent
 from .baseline import BaselineCollectionsAgent
 from .audit import AuditLogger
@@ -93,14 +96,14 @@ async def metrics():
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 @app.post("/session/start")
-async def session_start(payload: Dict[str, Any]):
+async def session_start(req: SessionStartRequest):
     # [C4] Enforce session cap
     if len(sessions) >= MAX_SESSIONS:
         raise HTTPException(status_code=429, detail="Max concurrent sessions reached")
 
-    session_id = payload.get("sessionId", f"s_{int(time.time()*1000)}")
-    debtor_id = payload.get("debtorId", "deb_001")
-    variant = payload.get("variant", "v2_graph")
+    session_id = req.sessionId or f"s_{int(time.time()*1000)}"
+    debtor_id = req.debtorId
+    variant = req.variant
 
     audit_logger = AuditLogger(session_id)
     initial_state: CallState = {
@@ -126,6 +129,7 @@ async def session_start(payload: Dict[str, Any]):
         "sessionId": session_id,
         "debtorId": debtor_id,
         "variant": variant,
+        "config": req.config or {},
         "state": initial_state,
         "audit_logger": audit_logger,
         "createdAt": int(time.time() * 1000)
@@ -133,9 +137,9 @@ async def session_start(payload: Dict[str, Any]):
     return {"status": "started", "sessionId": session_id, "variant": variant}
 
 @app.post("/session/end")
-async def session_end(payload: Dict[str, Any]):
-    session_id = payload.get("sessionId")
-    if not session_id or session_id not in sessions:
+async def session_end(req: SessionEndRequest):
+    session_id = req.sessionId
+    if session_id not in sessions:
         raise HTTPException(status_code=404, detail="Session not found")
     session_data = sessions.pop(session_id)
     audit_logger = session_data["audit_logger"]

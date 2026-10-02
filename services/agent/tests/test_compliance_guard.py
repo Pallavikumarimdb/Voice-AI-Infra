@@ -65,3 +65,28 @@ def test_pre_turn_third_party_protection():
     assert res is not None
     assert res[0] == "third_party_protection"
     assert "折り返しのお電話" in res[1]
+
+def test_post_llm_english_fdcpa_guards():
+    clock = FakeClock(datetime(2026, 10, 2, 14, 0, tzinfo=TOKYO_TZ))
+    guard = ComplianceGuard(clock=clock)
+
+    # 1. Threat of police / arrest
+    res = guard.check_post_llm("We will send the police and have you arrested.", {"identity_verified": True, "disclosure_done": True})
+    assert res is not None
+    assert res[0] == "threats_legal_force"
+
+    # 2. Third-party workplace disclosure threat
+    res = guard.check_post_llm("We will contact your employer and boss if you do not pay.", {"identity_verified": True, "disclosure_done": True})
+    assert res is not None
+    assert res[0] == "shaming_third_party_threat"
+
+    # 3. Insult / shaming
+    res = guard.check_post_llm("You are an irresponsible deadbeat.", {"identity_verified": True, "disclosure_done": True})
+    assert res is not None
+    assert res[0] == "shaming_insult"
+
+    # 4. False urgency
+    res = guard.check_post_llm("You must pay right now or else immediate consequences.", {"identity_verified": True, "disclosure_done": True})
+    assert res is not None
+    assert res[0] == "false_urgency"
+

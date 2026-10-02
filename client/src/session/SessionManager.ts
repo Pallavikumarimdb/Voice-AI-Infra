@@ -112,7 +112,11 @@ export class SessionManager {
 
     const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
     const workletUrl = URL.createObjectURL(blob);
-    await this.audioContext.audioWorklet.addModule(workletUrl);
+    try {
+      await this.audioContext.audioWorklet.addModule(workletUrl);
+    } finally {
+      URL.revokeObjectURL(workletUrl);
+    }
 
     const source = this.audioContext.createMediaStreamSource(this.mediaStream);
     this.workletNode = new AudioWorkletNode(this.audioContext, 'audio-capture-processor');

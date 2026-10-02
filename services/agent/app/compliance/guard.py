@@ -85,13 +85,22 @@ class ComplianceGuard:
 
         # Compile forbidden patterns (threats, shaming, false urgency, unauthorized legal action)
         self.forbidden_patterns = [
-            # Threats / Aggressive language
+            # Japanese: Threats / Aggressive language
             (re.compile(r'(警察|逮捕|訴訟|差し押さえ|強制執行|裁判沙汰)', re.IGNORECASE), "threats_legal_force"),
             (re.compile(r'(会社|職場|家族|親族|近所|周囲).*(連絡|知らせ|バラす|払わせ|請求)', re.IGNORECASE), "shaming_third_party_threat"),
-            # Shaming / Insults
+            # Japanese: Shaming / Insults
             (re.compile(r'(恥ずかしくない|無責任|常識がない|逃げるのか|いい加減にしろ)', re.IGNORECASE), "shaming_insult"),
-            # False urgency
-            (re.compile(r'(今すぐ払え|今日中じゃないと許さない|猶予は一切ない)', re.IGNORECASE), "false_urgency")
+            # Japanese: False urgency
+            (re.compile(r'(今すぐ払え|今日中じゃないと許さない|猶予は一切ない)', re.IGNORECASE), "false_urgency"),
+
+            # English: FDCPA Threats / Unlawful legal force
+            (re.compile(r'(police|arrest|jail|prosecut|foreclose|garnish|lawsuit|sheriff|sue you)', re.IGNORECASE), "threats_legal_force"),
+            # English: Third-party shaming / employer contact threats
+            (re.compile(r'(employer|workplace|boss|coworker|family|neighbor|relative).*(contact|tell|call|notify|expose|shame)|(contact|tell|call|notify|expose|shame).*(employer|workplace|boss|coworker|family|neighbor|relative)', re.IGNORECASE), "shaming_third_party_threat"),
+            # English: Shaming / Profanity / Insults
+            (re.compile(r'(shameless|irresponsible|deadbeat|liar|scammer|pathetic|loser)', re.IGNORECASE), "shaming_insult"),
+            # English: False urgency / Coercion
+            (re.compile(r'(pay right now or else|immediate arrest|zero tolerance|today or we send)', re.IGNORECASE), "false_urgency")
         ]
 
     def _load_rules(self) -> Dict[str, Any]:

@@ -61,3 +61,13 @@ class BrainResponse(BaseModel):
     text: str
     events: List[BrainEvent] = Field(default_factory=list)
     metrics: BrainMetrics
+
+class SessionStartRequest(BaseModel):
+    sessionId: Optional[str] = Field(None, pattern=r"^[a-zA-Z0-9_\-]{1,128}$")
+    debtorId: str = Field("deb_001", pattern=r"^[a-zA-Z0-9_\-]{1,64}$")
+    variant: str = Field("v2_graph", pattern=r"^[a-zA-Z0-9_\-]{1,32}$")
+    config: Optional[Dict[str, Any]] = None
+
+class SessionEndRequest(BaseModel):
+    sessionId: str = Field(..., pattern=r"^[a-zA-Z0-9_\-]{1,128}$")
+

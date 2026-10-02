@@ -34,7 +34,8 @@ class SessionState:
         self.segmenter = Segmenter(sample_rate=sample_rate)
         self.stabilizer = LocalAgreementStabilizer(agreement_n=agreement_n)
 
-        # Buffer for current active utterance
+        # Buffer for current active utterance (bounded to 30s max to prevent unbounded memory growth)
+        self.max_buffer_samples = int(sample_rate * 30)
         self.active_audio = np.array([], dtype=np.float32)
         self.last_capture_time_ms = 0
         self.last_asr_run_time_ms = 0
@@ -45,6 +46,10 @@ class SessionState:
             self.active_audio = audio_chunk
         else:
             self.active_audio = np.concatenate([self.active_audio, audio_chunk])
+        
+        # Enforce max buffer size
+        if len(self.active_audio) > self.max_buffer_samples:
+            self.active_audio = self.active_audio[-self.max_buffer_samples:]
 
     def trim_active_audio(self, seconds: float):
         samples_to_trim = int(seconds * self.sample_rate)

@@ -260,6 +260,7 @@ class GeneralizedVoiceAgent:
         account_id = context.get("accountId", "ACC-88219")
         tmpl = _KYC_TEMPLATES.get(language, _KYC_TEMPLATES["en"])
         events = []
+        user_lower = user_text.lower()
 
         if turn == 1:
             state["stage"] = "identity_verification"
@@ -268,6 +269,20 @@ class GeneralizedVoiceAgent:
             return reply, events
 
         elif turn == 2:
+            # Check for denial or refusal to authenticate
+            denial_patterns = ["違う", "違います", "分からない", "教えられない", "誰", "no", "wrong", "refuse", "not me", "don't know", "cannot"]
+            if any(p in user_lower for p in denial_patterns):
+                state["identity_verified"] = False
+                state["stage"] = "auth_failed"
+                reply = (
+                    "恐れ入ります。ご本人様確認が取れない場合、個人情報保護の観点から詳細なご案内ができません。ご確認の上、再度お問い合わせください。"
+                    if language == "ja" else
+                    "I apologize, but without verifying your identity, I cannot access your account details due to privacy regulations. Please verify your information and call back."
+                )
+                events.append({"type": "escalate", "payload": {"reason": "kyc_auth_failed"}, "ts": int(time.time() * 1000)})
+                events.append({"type": "end_call", "payload": {"status": "auth_failed"}, "ts": int(time.time() * 1000)})
+                return reply, events
+
             state["stage"] = "service_inquiry"
             state["identity_verified"] = True
             reply = tmpl[2]()
@@ -313,6 +328,21 @@ class GeneralizedVoiceAgent:
         debtor_name = context.get("debtorName", "佐藤 健一" if language == "ja" else "Alex Johnson")
         tmpl = _COLLECTIONS_TEMPLATES.get(language, _COLLECTIONS_TEMPLATES["en"])
         events = []
+        user_lower = user_text.lower()
+
+        # Stop contact check
+        stop_patterns = ["stop calling", "do not call", "remove my number", "don't call", "連絡しないで", "電話しないで", "かけてこないで", "二度と"]
+        if any(sp in user_lower for sp in stop_patterns):
+            state["stop_contact"] = True
+            state["stage"] = "stop_contact"
+            events.append({"type": "stop_contact", "payload": {"requested": True}, "ts": int(time.time() * 1000)})
+            events.append({"type": "end_call", "payload": {"status": "stop_contact"}, "ts": int(time.time() * 1000)})
+            reply = (
+                "ご連絡停止のご要望を承りました。お電話番号を連絡停止リストに登録いたしました。失礼いたします。"
+                if language == "ja" else
+                "We have recorded your stop-contact request and added your number to our suppression list. We will not contact you again. Goodbye."
+            )
+            return reply, events
 
         if turn == 1:
             state["stage"] = "identity_verification"
@@ -322,6 +352,20 @@ class GeneralizedVoiceAgent:
             return reply, events
 
         elif turn == 2:
+            # Check third party / wrong person denial
+            wrong_person_patterns = ["wrong person", "not me", "wrong number", "don't know", "人違い", "違います", "間違い電話", "そんな人はいません"]
+            if any(wp in user_lower for wp in wrong_person_patterns):
+                state["identity_verified"] = False
+                state["third_party_detected"] = True
+                events.append({"type": "escalate", "payload": {"reason": "wrong_person"}, "ts": int(time.time() * 1000)})
+                events.append({"type": "end_call", "payload": {"status": "third_party"}, "ts": int(time.time() * 1000)})
+                reply = (
+                    "大変失礼いたしました。間違い電話のお詫びを申し上げます。登録情報を確認いたします。失礼いたします。"
+                    if language == "ja" else
+                    "I apologize for the inconvenience. We have noted that this is the incorrect contact number and will update our records. Have a good day."
+                )
+                return reply, events
+
             state["stage"] = "negotiation"
             state["identity_verified"] = True
             reply = tmpl[2]()
