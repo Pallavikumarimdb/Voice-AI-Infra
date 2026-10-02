@@ -14,7 +14,10 @@ BrainEventType = Literal[
     "identity_verified",
     "promise_to_pay",
     "stop_contact",
-    "end_call"
+    "end_call",
+    "candidate_qualified",
+    "kyc_verified",
+    "rubric_scored"
 ]
 
 class BrainEvent(BaseModel):

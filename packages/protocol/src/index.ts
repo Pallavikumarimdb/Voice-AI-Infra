@@ -62,12 +62,21 @@ export interface ErrorMessage {
   message?: string;
 }
 
+export interface AgentConfig {
+  domain?: 'collections' | 'screening' | 'kyc' | 'custom' | string;
+  instructions?: string;
+  greeting?: string;
+  guardrails?: string[];
+  context?: Record<string, any>;
+}
+
 export interface StartControlMessage {
   type: 'start';
   srcLang: string;
   tgtLang: string;
   sampleRate: number;
   mode?: 'translate' | 'agent';
+  config?: AgentConfig;
 }
 
 export interface StopControlMessage {
@@ -83,7 +92,10 @@ export type BrainEventType =
   | 'identity_verified'
   | 'promise_to_pay'
   | 'stop_contact'
-  | 'end_call';
+  | 'end_call'
+  | 'candidate_qualified'
+  | 'kyc_verified'
+  | 'rubric_scored';
 
 export interface BrainEvent {
   type: BrainEventType;

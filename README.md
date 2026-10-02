@@ -1,4 +1,4 @@
-# 🎙️ VoiceAI Infra: Enterprise Japanese Collections Voice Agent & Streaming Engine
+# 🎙️ VoiceAI Infra: Generalized Regulated Voice Agent Platform & Streaming Engine
 
 <div align="center">
 
@@ -10,14 +10,15 @@
 [![Compliance](https://img.shields.io/badge/Hard--Fail%20Rate-0.0%25-brightgreen)](docs/results.md)
 [![Audit](https://img.shields.io/badge/Audit%20Log-SHA--256%20Chained-indigo)](docs/ui_data_formats.md)
 
-**A mission-critical, real-time Voice AI infrastructure and autonomous agent platform built for regulated debt collection (`債権回収`) and high-throughput streaming speech translation.**
+**An ultra-low latency (<880ms p50), enterprise voice infrastructure and multi-purpose regulated agent platform. Easily configured across Debt Collections (`債権回収`), Candidate Screening (`採用選考`), Customer KYC (`本人確認`), and Custom Voice Workflows via in-UI prompt and guardrail controls.**
 
-[Key Innovations](#-key-innovations) •
+[Vertical Solutions](#-multi-purpose-vertical-solutions) •
+[In-UI Agent Studio](#-in-ui-agent-studio--dynamic-configuration) •
 [Architecture](#-system-architecture) •
 [Benchmark Results](#-benchmark-results-champion-vs-challenger) •
-[Reviewer & Validation UI](#-reviewer--validation-ui) •
+[Reviewer UI](#-reviewer--validation-ui) •
 [Quickstart](#-quickstart--deployment) •
-[Security & Compliance](#-code-level-compliance-guarantees)
+[Compliance Engine](#-code-level-compliance-guarantees)
 
 </div>
 
@@ -25,28 +26,68 @@
 
 > [!IMPORTANT]
 > **LEGAL & SYNTHETIC DATA DISCLAIMERS**:
-> 1. **100% Synthetic Data**: All debtor profiles, creditor entities, account balances, addresses, and telephone numbers used across this repository, automated test suites, and sample data packages are strictly synthetic. Any resemblance to real persons or actual corporations is entirely coincidental.
-> 2. **Engineering Prototype**: This project represents an advanced systems engineering and AI safety demonstration. It does not constitute legal counsel, nor is it a licensed financial debt collection service.
-> 3. **Illustrative Regulation Rules**: Enforced policies (e.g. Japanese statutory contact windows, mandatory pre-disclosure DOB verification) reflect representative financial compliance frameworks.
+> 1. **100% Synthetic Data**: All debtor profiles, candidate credentials, customer accounts, and creditor entities used across this repository, automated test suites, and sample data packages are strictly synthetic. Any resemblance to real persons or entities is entirely coincidental.
+> 2. **Engineering Prototype**: This project represents an advanced systems engineering and AI safety demonstration. It does not constitute legal counsel, nor is it a licensed financial service or employment agency.
+> 3. **Illustrative Regulation Rules**: Enforced policies (e.g. Japanese statutory contact windows, mandatory pre-disclosure DOB verification, anti-bias interview guards) reflect representative regulatory frameworks.
 > 4. **Japanese Linguistic Verification**: Conversational register and business honorifics (*Keigo / です・ます*) are documented in [docs/japanese_review.md](docs/japanese_review.md).
 
 ---
 
-## ⚡ The Enterprise Problem: Why Prompt-Only Agents Fail
+## 🌐 Multi-Purpose Vertical Solutions
 
-In regulated financial domains like consumer debt collection, prompt-engineered AI models are a catastrophic compliance liability:
+VoiceAI Infra is architected as a **generalized, modular voice foundation**. The core streaming audio engine (faster-whisper STT, Silero VAD, sub-25ms barge-in, neural TTS, and SHA-256 audit chaining) remains rock-solid, while domain behavior, prompt instructions, and regulatory guardrails can be adapted with a few configuration parameters or configured live in the UI:
 
-* **Illegal Pre-Verification Disclosure**: Under Japanese privacy standards, disclosing debt existence or creditor identity before verifying debtor identity (e.g. Date of Birth) is illegal. Standard LLM system prompts frequently leak information when callers ask *"Why are you calling me?"* or *"Who is this?"*.
-* **Statutory Hours Breaches**: Contacting consumers outside permitted legal windows (08:00–21:00 JST) violates lending regulations. Pure LLMs cannot reliably check system clocks or regional timezone boundaries.
-* **Harassment & Unregulated Threats**: Escalated callers often induce adversarial jailbreaks where unconstrained models threaten lawsuits, police intervention, or workplace visits.
-* **Repudiation & Non-Auditable Black Boxes**: Regulators mandate complete, unalterable logs of every interaction. Standard chat histories cannot prove that records were not retroactively altered.
+| Vertical Domain | Primary Workflow | Key Compliance & Guardrail Rules | Out-of-the-Box Persona Context |
+|:---|:---|:---|:---|
+| 💼 **Collections & AR** (`債権回収`) | Debt notifications, payment negotiation, hardship installment arrangements. | • DOB verification before disclosure<br>• Statutory calling hours (08:00–21:00 JST)<br>• Third-party disclosure prohibition | **山田 太郎 (Taro Yamada)**<br>¥48,000 balance • みらいファイナンス |
+| 🎯 **Candidate Screening** (`採用スクリーニング`) | Recruiter first-round interviews, tech qualification, work model & salary fit. | • Anti-discrimination & bias guard<br>• Candidate privacy & NDA protection<br>• Salary range band verification | **佐藤 健一 (Kenichi Sato)**<br>Senior Full-Stack Lead Engineer |
+| 🛡️ **Customer KYC & Support** (`本人確認`) | Identity authentication, 2FA/PIN confirmation, account service inquiry. | • 2-Factor PIN verification<br>• PII masking on credentials<br>• Fraud suspicion auto-escalation | **鈴木 一郎 (Ichiro Suzuki)**<br>Account #88219 • Tier 2 Security |
+| ⚡ **Custom Enterprise Agent** (`カスタム`) | User-defined inbound/outbound telephony, surveys, and advisory workflows. | • Configurable compliance guard rules<br>• PII and confidentiality filters<br>• Empathy & civility filters | Custom user-provided context & scenario |
 
-### Our Solution: Code-Level Guarantees Outside the Prompt
+---
 
-We isolate compliance entirely from LLM hallucinations through deterministic, code-level safety boundaries:
+## 🎛️ In-UI Agent Studio & Dynamic Configuration
+
+Users can adapt or switch the agent's behavior directly inside the **Live Agent Studio** without rebuilding services:
 
 ```text
-Incoming Utterance ──► [Pre-Turn Guard] ──► [LangGraph Fast Path]  (Deterministic: 18ms)
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│ ⚙️ Agent Studio: Domain & Instructions Configurator        Active: 🎯 採用スクリーニング │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│ Preset: [💼 Collections & AR]  [🎯 Candidate Screening]  [🛡️ KYC]  [⚡ Custom]      │
+│                                                                                  │
+│ System Instructions & Domain Guidance:                                           │
+│ ┌──────────────────────────────────────────────────────────────────────────────┐ │
+│ │ Conduct a professional, warm 5-minute first-round screening interview. Ask   │ │
+│ │ about: 1) Recent experience with React & distributed systems, 2) Preferred   │ │
+│ │ working model (remote vs hybrid), 3) Expected compensation range.            │ │
+│ └──────────────────────────────────────────────────────────────────────────────┘ │
+│ Opening Greeting:                                                                │
+│ ┌──────────────────────────────────────────────────────────────────────────────┐ │
+│ │ 佐藤様、本日は面談のお時間をいただきありがとうございます。AI採用アシスタント... │ │
+│ └──────────────────────────────────────────────────────────────────────────────┘ │
+│ Context: Role: Senior Full-Stack Engineer • Level: Lead                          │
+│ Active Guardrails: [✓ Anti-Discrimination] [✓ Salary Cap] [✓ NDA] [✓ Civility]   │
+└──────────────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **One-Click Domain Switching**: Instant switching between Collections, Candidate Screening, Customer KYC, and Custom Agents.
+2. **Live Instruction Editing**: Edit prompt instructions, greeting, and context on-the-fly; the browser passes configuration via WebSocket to the gateway and agent brain.
+3. **Adaptive State Machine Chips**: Status indicators dynamically transform based on the active domain (e.g. Collections displays `Verified / Disclosed / Debt Promise`, Screening displays `Stage / Tech Stack Noted / Compensation Fit / Qualified`).
+4. **Guardrail Checkpoints**: Toggle regulatory checks like statutory hours, DOB identity verification, anti-discrimination filters, and civility guards.
+
+---
+
+## ⚡ Why Code-Level Guarantees Matter
+
+In high-stakes voice interactions, an unconstrained LLM guided only by a prompt is an unacceptable business risk:
+* **Prompt Leaks & Jailbreaks**: Callers asking *"Why are you calling?"* often trick standard prompts into leaking private financial or confidential information before verifying credentials.
+* **Timing & Statutory Hours**: Prompts cannot reliably read clocks or enforce timezone windows (e.g. 08:00–21:00 JST).
+* **Bias & Unregulated Questions**: In HR interviews, LLMs may inadvertently ask off-limit personal questions (e.g. marital status, age).
+
+### The Solution: Code-Level Guarantees Outside the Prompt
+```text
+Caller Utterance ──► [Pre-Turn Guard] ──► [LangGraph Fast Path]  (Deterministic: 18ms)
                             │                       │
                      (Blocked? Exit)                ▼
                             │              [LangGraph Slow Path]  (LLM Synthesis: 350ms)
@@ -58,23 +99,10 @@ Incoming Utterance ──► [Pre-Turn Guard] ──► [LangGraph Fast Path]  (
               [SHA-256 Hash Audit Chain] ──► [Streaming TTS Output]
 ```
 
-1. **Deterministic Pre-Turn Guards**: Validates calling hours and contact prohibition flags *before* token generation—consuming **0 LLM tokens** on blocked calls.
-2. **Deterministic Post-Turn Guards**: Normalizes complex Japanese numeric/kanji currencies (`４８，０００円`, `4万8千円`, `四万八千円`), blocking unauthorized disclosures or prohibited terms before voice synthesis.
-3. **Dual-Path LangGraph Orchestration**: Fast-path deterministic graph nodes resolve routine turns in `< 20ms`; slow-path LLM generation handles complex negotiation in `< 450ms`.
-4. **Cryptographic Tamper-Evident Audit Trails**: Every turn generates an immutable record chained with `prev_hash: sha256(...)` matching FIPS 180-4 standards.
-
----
-
-## 🌟 Key Innovations
-
-| Feature | Description | Enterprise Value |
-|:---|:---|:---|
-| **Sub-880ms Glass-to-Glass Latency** | Optimized VAD, streaming Faster-Whisper, fast-path graph routing, and chunked 16kHz PCM audio delivery. | Human-like conversational turn-taking meeting strict `< 1.5s` SLA. |
-| **Instant Voice Barge-in (< 25ms)** | Browser `AudioWorklet` client streams live audio; gateway executes immediate `AbortController` cancellation upon user speech. | Natural interruptions without audio overlap or ghosting. |
-| **Dual-Path LangGraph Architecture** | Distinguishes between fixed compliance checkpoints (identity verification) and free-form objection handling. | 60% latency reduction and 45% token cost savings. |
-| **Tamper-Proof Audit Chain** | SHA-256 canonical JSON hash chains generated on-the-fly for every turn. | Instant regulatory auditability and non-repudiation. |
-| **Full Reviewer & Labeling UI** | Production-grade React client with Call Inspector, Blind Rubric Labeling, and Real-Time HUD. | Eliminates reviewer bias and accelerates human-in-the-loop validation. |
-| **Bilingual Translation Support** | Real-time Japanese ↔ English streaming speech translation powered by continuous batching. | Multi-purpose voice infrastructure for international contact centers. |
+1. **Deterministic Pre-Turn Guards**: Intercepts unauthorized turns *before* token generation—consuming **0 LLM tokens**.
+2. **Deterministic Post-Turn Guards**: Normalizes complex Japanese numeric/kanji currencies and blocks unauthorized disclosures or off-limit phrases before speech synthesis.
+3. **Dual-Path Routing**: Fast-path deterministic graph nodes resolve routine turns in `< 20ms`; slow-path LLM synthesis handles complex negotiation in `< 450ms`.
+4. **Cryptographic Tamper-Evident Audit Trails**: Every turn generates an immutable JSONL record chained with `prev_hash: sha256(...)` matching FIPS 180-4 standards.
 
 ---
 
@@ -84,7 +112,7 @@ Incoming Utterance ──► [Pre-Turn Guard] ──► [LangGraph Fast Path]  (
                                  ┌──────────────────────────────────┐
                                  │   Browser Client (React + Vite)  │
                                  │  - Web Audio Worklet (16kHz PCM) │
-                                 │  - Reviewer & Validation Suite   │
+                                 │  - Live Agent Studio & Inspector │
                                  └─────────────────┬────────────────┘
                                                    │
                                      wss://:8443   │  Binary 16kHz PCM (in)
@@ -94,7 +122,7 @@ Incoming Utterance ──► [Pre-Turn Guard] ──► [LangGraph Fast Path]  (
                                  │    Gateway Router (Node.js/TS)   │
                                  │  - WebSocket Session Coordinator │
                                  │  - Instant Barge-in Cancellation │
-                                 │  - Data API & Audit Log Server   │
+                                 │  - Domain Config & REST Data API │
                                  └────────┬─────────────────┬───────┘
                                           │                 │
                 ws://:8001/stream         │                 │  http://:8003/turn
@@ -102,7 +130,7 @@ Incoming Utterance ──► [Pre-Turn Guard] ──► [LangGraph Fast Path]  (
       ▼                                                                                         ▼
 ┌───────────────┐                                                                     ┌───────────────────┐
 │  STT Service  │                                                                     │    Agent Brain    │
-│ Faster-Whisper│                                                                     │ (LangGraph v2)    │
+│ Faster-Whisper│                                                                     │ (Multi-Domain)    │
 │ + Silero VAD  │                                                                     │ + Rules Guards    │
 └───────┬───────┘                                                                     │ + SHA-256 Auditor │
         │                                                                             └─────────┬─────────┘
@@ -122,7 +150,7 @@ Incoming Utterance ──► [Pre-Turn Guard] ──► [LangGraph Fast Path]  (
 
 ## 📊 Benchmark Results: Champion vs. Challenger
 
-We evaluated our architecture across **10 realistic debtor personas** (Cooperative, Hostile, Evasive, Financial Hardship, Third-Party Representative, Dispute, etc.) with 20 randomized simulation runs per variant:
+Evaluated across **10 realistic debtor personas** with 20 randomized simulation runs per variant:
 
 | Architecture Variant | Sample Size (n) | Hard-Fail Rate (95% CI) | Judge Score (1–5) | Latency p50 | Latency p95 | Cost / 1k Calls |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -131,12 +159,9 @@ We evaluated our architecture across **10 realistic debtor personas** (Cooperati
 | *v1 Ablation (Prompt Only, No Guard)* | 20 | 55.0% [34.2%, 74.2%] | 2.15 ± 0.44 | 388.1 ms | 554.0 ms | $3.38 |
 | *v2 Ablation (Fast Path Only, No LLM)* | 20 | 0.0% [0.0%, 16.1%] | 2.85 ± 0.35 | 18.2 ms | 24.5 ms | $0.00 |
 
-### Strategic Takeaways
-* **100% Elimination of Hard Breaches**: Zero pre-verification leaks or statutory calling window violations across all test runs.
-* **59.6% Reduction in Brain Latency**: Deterministic fast-path execution slashed median turn response from 392ms down to 158ms.
+* **0% Hard Breaches**: Zero unauthorized disclosures or compliance violations.
+* **59.6% Reduction in Brain Latency**: Fast-path deterministic turns slashed median brain response from 392ms down to 158ms.
 * **45.6% Operational Cost Savings**: Structured routing significantly reduces total token consumption per call.
-
-*For complete statistical methodologies, Wilson score distributions, and Pareto curves, see [docs/results.md](docs/results.md).*
 
 ---
 
@@ -153,7 +178,7 @@ Real-time audio telemetry measured from end-of-utterance to start of synthesized
 |:---|:---:|:---:|:---:|:---|
 | **1. VAD Silence Detection** | 350.0 ms | 350.0 ms | 39.8% | Adaptive 350ms silence hangover threshold |
 | **2. ASR Acoustic Decoding** | 218.4 ms | 338.7 ms | 24.8% | Faster-Whisper acoustic tokenization |
-| **3. Agent Decision & Guard** | 158.4 ms | 452.1 ms | 18.0% | LangGraph classifier + deterministic guard |
+| **3. Agent Decision & Guard** | 158.4 ms | 452.1 ms | 18.0% | Multi-domain classifier + deterministic guard |
 | **4. TTS Time-to-First-Audio**| 138.2 ms | 226.8 ms | 15.7% | Streaming 16kHz mono PCM synthesis |
 | **5. Transport & Jitter** | 14.5 ms | 32.0 ms | 1.7% | Binary WebSocket framing overhead |
 | **Total Round-Trip Time** | **879.5 ms** | **1,180.0 ms** | **100.0%** | **Compliant with < 1,500 ms SLA** |
@@ -162,33 +187,13 @@ Real-time audio telemetry measured from end-of-utterance to start of synthesized
 
 ## 🖥️ Reviewer & Validation UI
 
-The platform includes a modern React/TypeScript control center for real-time validation, call analysis, and bias-free evaluation:
+The web application includes a comprehensive control center for live testing, call inspection, and validation:
 
-```text
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│ Voice AI Reviewer      [Live Call]   [Call Inspector]   [Eval Results]   [Label] │
-├──────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                  │
-│  [1. Live Call (/live)]               [2. Call Inspector (/calls/:id)]           │
-│  • Full mic audio capture             • Complete turn-by-turn visual timeline    │
-│  • Real-time state machine indicators • Guard diff (Attempted vs Safe Override)  │
-│  • Streaming compliance event ticker  • Interactive SHA-256 Hash Chain verifier  │
-│  • Sub-25ms instant barge-in cutoff   • Structured human collector handoff card  │
-│  • One-click deep link to inspector   • Persona hidden facts reveal drawer       │
-│                                                                                  │
-│  [3. Evaluation Results (/results)]   [4. Human Labeling (/label)]               │
-│  • Champion vs Challenger benchmarks  • Blinded transcripts (zero reviewer bias) │
-│  • Pareto Frontier: Delay vs Cutoff   • 6-criterion rubric scoring (1–5 scale)   │
-│  • Root cause failure mode breakdown  • Binary pass/fail & escalation flagging   │
-│  • LLM-Judge vs Human agreement       • Append-only persistence (human_labels)   │
-│                                                                                  │
-└──────────────────────────────────────────────────────────────────────────────────┘
-```
-
-* **Live Testing HUD (`/live`)**: Direct real-time browser microphone streaming with live telemetry, state indicators (`Phase`, `Verified`, `Disclosed`), and instant barge-in interruption.
-* **Deep Call Inspector (`/calls`, `/calls/:id`)**: Comprehensive turn inspection showing caller audio, LLM output, guard overrides, tool execution, per-turn latency bars, and persona hidden facts. Includes an interactive **"Simulate Tamper"** button to prove SHA-256 hash-chain invalidation in real time.
+* **Live Agent Studio (`/live`)**: Test voice calls across Collections, Candidate Screening, Customer KYC, and Custom Agents. Includes in-UI instruction and greeting editor, real-time state machine indicators, and sub-25ms barge-in cutoff.
+* **Deep Call Inspector (`/calls`, `/calls/:id`)**: Browse calls with multi-field filtering. Detailed vertical timeline shows caller speech, agent attempted text vs. safe override diffs, tool calls, and per-turn latency. Features an interactive **"Simulate Tamper"** button proving instant SHA-256 hash-chain invalidation.
 * **Human Labeling Suite (`/label`)**: Blinded labeling console preventing evaluation bias. Reviewers score transcripts against a 6-criterion rubric with keyboard shortcuts (`1-5`, `Enter`, `N`).
-* **Offline Sample Data Mode**: Runs completely standalone. If the backend is not booted, the UI automatically falls back to pre-rendered evaluation datasets in `client/public/sample-data/`.
+* **Evaluation Results Viewer (`/results`)**: Direct rendering of benchmark summary metrics, Wilson 95% confidence intervals, and the silence hangover Pareto frontier.
+* **Offline Sample Data Mode**: Runs completely standalone. If backend services are not running, the UI automatically falls back to pre-rendered evaluation datasets in `client/public/sample-data/`.
 
 ---
 
@@ -210,8 +215,6 @@ npm run build
 ```
 
 ### 2. Launch Services in Development Mode
-
-Run the individual service nodes in separate terminals:
 
 ```bash
 # Terminal 1: Agent Brain Service (Python / FastAPI / LangGraph)
@@ -241,14 +244,13 @@ Open `http://localhost:5173` in your browser.
 ---
 
 ### 3. Interactive CLI Testing
-Test conversation flows against debtor personas directly in your console:
 ```bash
 cd services/agent
 
-# Test against a cooperative debtor (Taro Yamada)
+# Test against a cooperative debtor
 python -m app.cli --persona cooperative
 
-# Test against an evasive or hostile debtor
+# Test against a hostile debtor
 python -m app.cli --persona hostile
 
 # Test against an unauthorized third-party
@@ -302,7 +304,7 @@ Tampering with any historical turn, timestamp, or score immediately breaks all d
 
 ```text
 .
-├── client/                     # Modern React Reviewer UI, AudioWorklet, HUD, Inspector
+├── client/                     # Modern React Reviewer UI, Agent Studio, AudioWorklet, HUD
 │   ├── src/ui/                 # LiveCallPanel, CallInspector, LabelingScreen, ResultsViewer
 │   ├── src/data/               # Cryptographic hash verifier, data loaders, offline client
 │   └── public/sample-data/     # Pre-rendered evaluation runs and persona datasets
@@ -310,7 +312,7 @@ Tampering with any historical turn, timestamp, or score immediately breaks all d
 │   ├── src/routes/dataApi.ts   # Secure endpoints for calls, runs, personas, and labels
 │   └── tests/                  # Path-traversal security test suite
 ├── services/
-│   ├── agent/                  # LangGraph state machine, rules guards, audit logger, CLI
+│   ├── agent/                  # Multi-domain agent, LangGraph state machine, rules guards, CLI
 │   ├── stt/                    # Faster-Whisper ASR + Silero VAD segmenter
 │   ├── tts/                    # Streaming neural 16kHz PCM synthesizer
 │   └── mt/                     # Real-time Japanese ↔ English streaming translation engine

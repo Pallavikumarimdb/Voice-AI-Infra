@@ -1,8 +1,69 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SessionManager, SessionState } from '../session/SessionManager';
-import { GatewayMessage } from '@voice/protocol';
+import { GatewayMessage, AgentConfig } from '@voice/protocol';
 import { Captions, CaptionEntry } from './Captions';
 import { LatencyHUD } from './LatencyHUD';
+
+export type DomainType = 'collections' | 'screening' | 'kyc' | 'custom';
+
+interface DomainPreset {
+  id: DomainType;
+  title: string;
+  badge: string;
+  actionText: string;
+  targetLabel: string;
+  contextDesc: string;
+  greeting: string;
+  instructions: string;
+  guardrails: string[];
+}
+
+const DOMAIN_PRESETS: Record<DomainType, DomainPreset> = {
+  collections: {
+    id: 'collections',
+    title: 'Collections & AR',
+    badge: '💼 債権回収',
+    actionText: 'Start Call (債権回収)',
+    targetLabel: '山田 太郎 (Taro Yamada)',
+    contextDesc: 'Debt: ¥48,000 • Creditor: みらいファイナンス',
+    greeting: 'もしもし、山田太郎様のお電話でお間違いないでしょうか？私、みらい債権回収センターのAIオペレーターでございます。',
+    instructions: 'Maintain polite Japanese Keigo (です・ます). Strictly verify debtor identity with Date of Birth before disclosing amount. If debtor mentions financial hardship, offer structured installment plans up to 6 months.',
+    guardrails: ['DOB Verification Required', 'Calling Hours (08:00-21:00 JST)', 'Third-Party Disclosure Ban', 'Civility Filter']
+  },
+  screening: {
+    id: 'screening',
+    title: 'Candidate Screening',
+    badge: '🎯 採用スクリーニング',
+    actionText: 'Start Call (採用選考)',
+    targetLabel: '佐藤 健一 (Kenichi Sato)',
+    contextDesc: 'Role: Senior Full-Stack Engineer • Level: Lead',
+    greeting: '佐藤様、本日は面談のお時間をいただきありがとうございます。AI採用アシスタントとして、ご経歴と転職のご希望条件について数点お伺いいたします。',
+    instructions: 'Conduct a professional, warm 5-minute first-round screening interview. Ask about: 1) Recent experience with React & distributed systems, 2) Preferred working model (remote vs hybrid), 3) Expected compensation range. Validate answers concisely.',
+    guardrails: ['Anti-Discrimination Guard', 'Salary Range Cap Check', 'Strict NDA & Privacy', 'Civility Filter']
+  },
+  kyc: {
+    id: 'kyc',
+    title: 'Customer KYC & Support',
+    badge: '🛡️ 本人確認・サポート',
+    actionText: 'Start Call (本人確認)',
+    targetLabel: '鈴木 一郎 (Ichiro Suzuki)',
+    contextDesc: 'Account: ACC-88219 • Security Tier: 2',
+    greeting: 'お電話ありがとうございます。カスタマーサポートAIでございます。お手続きの前にご本人様確認を実施させていただきます。',
+    instructions: 'Authenticate customer by confirming registered phone number and 4-digit security PIN. Assist with account inquiry once authenticated. Never reveal plaintext PIN or sensitive billing data unverified.',
+    guardrails: ['2-Factor PIN Authentication', 'PII Masking Guard', 'Fraud Suspicion Auto-Flag', 'Civility Filter']
+  },
+  custom: {
+    id: 'custom',
+    title: 'Custom Enterprise Agent',
+    badge: '⚡ カスタム',
+    actionText: 'Start Call (カスタムAI)',
+    targetLabel: 'Target Contact',
+    contextDesc: 'Custom Scenario & Enterprise Parameters',
+    greeting: 'お電話ありがとうございます。AIアシスタントでございます。どのようなご用件でしょうか。',
+    instructions: 'Act as a professional enterprise voice agent. Follow customer instructions, maintain high empathy, and protect customer data.',
+    guardrails: ['Custom Regulatory Guard', 'PII Protection', 'Civility Filter']
+  }
+};
 
 interface LiveCallPanelProps {
   onInspectCall: (sessionId: string) => void;
@@ -19,20 +80,47 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Agent call state indicators
+  // Dynamic Domain & Agent Configuration state
+  const [activeDomain, setActiveDomain] = useState<DomainType>('collections');
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [customGreeting, setCustomGreeting] = useState(DOMAIN_PRESETS.collections.greeting);
+  const [customInstructions, setCustomInstructions] = useState(DOMAIN_PRESETS.collections.instructions);
+  const [targetContext, setTargetContext] = useState(DOMAIN_PRESETS.collections.contextDesc);
+  const [targetSubject, setTargetSubject] = useState(DOMAIN_PRESETS.collections.targetLabel);
+  const [activeGuardrails, setActiveGuardrails] = useState<string[]>(DOMAIN_PRESETS.collections.guardrails);
+
+  // Domain-specific state indicators
   const [callPhase, setCallPhase] = useState('greet');
   const [identityVerified, setIdentityVerified] = useState(false);
   const [disclosureDone, setDisclosureDone] = useState(false);
   const [stopContact, setStopContact] = useState(false);
   const [promiseCaptured, setPromiseCaptured] = useState<string | null>(null);
 
-  // Streaming Compliance Event Feed
+  // Candidate Screening indicators
+  const [screeningQualified, setScreeningQualified] = useState(false);
+  const [screeningStage, setScreeningStage] = useState('intro');
+
+  // KYC indicators
+  const [kycResolved, setKycResolved] = useState(false);
+
+  // Streaming Compliance & Event Feed
   const [eventsFeed, setEventsFeed] = useState<Array<{ type: string; rule?: string; text?: string; time: string }>>([]);
   const [lastCompletedSessionId, setLastCompletedSessionId] = useState<string | null>(null);
 
   const sessionManagerRef = useRef<SessionManager | null>(null);
   const currentSessionIdRef = useRef<string | null>(null);
   const captureTimestampsRef = useRef<Map<number, number>>(new Map());
+
+  // Handle switching preset
+  const handleSelectDomain = (domain: DomainType) => {
+    setActiveDomain(domain);
+    const preset = DOMAIN_PRESETS[domain];
+    setCustomGreeting(preset.greeting);
+    setCustomInstructions(preset.instructions);
+    setTargetContext(preset.contextDesc);
+    setTargetSubject(preset.targetLabel);
+    setActiveGuardrails(preset.guardrails);
+  };
 
   useEffect(() => {
     const gatewayProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -96,7 +184,7 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
               if (ev.type === 'identity_verified') {
                 setIdentityVerified(true);
                 setCallPhase('disclose');
-                setEventsFeed((prev) => [{ type: 'identity_verified', text: 'Identity confirmed by DOB match', time: timeStr }, ...prev]);
+                setEventsFeed((prev) => [{ type: 'identity_verified', text: 'Identity verified successfully', time: timeStr }, ...prev]);
               } else if (ev.type === 'promise_to_pay') {
                 const amt = ev.payload?.amount ? `¥${ev.payload.amount.toLocaleString()}` : '';
                 const date = ev.payload?.date || '';
@@ -104,12 +192,20 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
                 setCallPhase('close');
                 setEventsFeed((prev) => [{ type: 'promise_to_pay', text: `Promise recorded: ${amt} on ${date}`, time: timeStr }, ...prev]);
               } else if (ev.type === 'compliance_block') {
-                setEventsFeed((prev) => [{ type: 'compliance_block', rule: ev.payload?.rule || 'compliance_rule', text: ev.payload?.text || 'Guard intercepted illegal phrasing', time: timeStr }, ...prev]);
+                setEventsFeed((prev) => [{ type: 'compliance_block', rule: ev.payload?.rule || 'compliance_rule', text: ev.payload?.text || 'Guard intercepted unauthorized disclosure', time: timeStr }, ...prev]);
               } else if (ev.type === 'escalate') {
-                setEventsFeed((prev) => [{ type: 'escalate', text: `Escalated to human collector: ${ev.payload?.reason || ''}`, time: timeStr }, ...prev]);
+                setEventsFeed((prev) => [{ type: 'escalate', text: `Escalated to human supervisor: ${ev.payload?.reason || ''}`, time: timeStr }, ...prev]);
               } else if (ev.type === 'stop_contact') {
                 setStopContact(true);
-                setEventsFeed((prev) => [{ type: 'stop_contact', text: 'Debtor requested stop contact; added to suppress list', time: timeStr }, ...prev]);
+                setEventsFeed((prev) => [{ type: 'stop_contact', text: 'Stop contact requested; added to suppress list', time: timeStr }, ...prev]);
+              } else if (ev.type === 'candidate_qualified') {
+                setScreeningQualified(true);
+                setScreeningStage('qualified');
+                setEventsFeed((prev) => [{ type: 'candidate_qualified', text: 'Candidate successfully qualified for next round', time: timeStr }, ...prev]);
+              } else if (ev.type === 'state_change') {
+                if (ev.payload?.stage) {
+                  setScreeningStage(ev.payload.stage);
+                }
               }
             }
           }
@@ -140,7 +236,7 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
         } else if (msg.type === 'interrupt') {
           setIsAgentSpeaking(false);
           const timeStr = new Date().toLocaleTimeString();
-          setEventsFeed((prev) => [{ type: 'interrupt', text: 'Barge-in: Caller spoke during agent playback', time: timeStr }, ...prev]);
+          setEventsFeed((prev) => [{ type: 'interrupt', text: 'Barge-in: User spoke during agent playback (<25ms cutoff)', time: timeStr }, ...prev]);
 
           setEntries((prev) => {
             if (msg.uttId !== undefined) {
@@ -174,17 +270,219 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
       setDisclosureDone(false);
       setStopContact(false);
       setPromiseCaptured(null);
+      setScreeningQualified(false);
+      setScreeningStage('intro');
+      setKycResolved(false);
       setCallPhase('greet');
       setEventsFeed([]);
-      sessionManagerRef.current?.start('ja', 'ja', 'agent');
+
+      // Prepare agent config
+      const agentConfig: AgentConfig = {
+        domain: activeDomain,
+        instructions: customInstructions,
+        greeting: customGreeting,
+        guardrails: activeGuardrails,
+        context: {
+          targetSubject,
+          contextDesc: targetContext,
+          candidateName: targetSubject,
+          customerName: targetSubject,
+        }
+      };
+
+      sessionManagerRef.current?.start('ja', 'ja', 'agent', agentConfig);
     } else {
       sessionManagerRef.current?.stop();
       setIsAgentSpeaking(false);
     }
   };
 
+  const currentPreset = DOMAIN_PRESETS[activeDomain];
+
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+      
+      {/* Agent Studio & Domain Configurator Card */}
+      <div
+        style={{
+          background: '#161b22',
+          border: '1px solid #30363d',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            padding: '12px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'rgba(31, 111, 235, 0.08)',
+            borderBottom: isConfigOpen ? '1px solid #30363d' : 'none',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#f0f6fc' }}>
+              ⚙️ Agent Studio: Domain & Instructions Configurator
+            </span>
+            <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '12px', background: '#21262d', color: '#58a6ff', border: '1px solid #30363d' }}>
+              Active: {currentPreset.badge}
+            </span>
+          </div>
+
+          <button
+            onClick={() => setIsConfigOpen(!isConfigOpen)}
+            style={{
+              background: 'transparent',
+              border: '1px solid #30363d',
+              color: '#c9d1d9',
+              padding: '4px 12px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: 500,
+            }}
+          >
+            {isConfigOpen ? 'Hide Studio Configuration ▲' : 'Customize Instructions & Rules ▼'}
+          </button>
+        </div>
+
+        {/* Domain Presets Bar */}
+        <div style={{ padding: '12px 20px', display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', borderBottom: isConfigOpen ? '1px solid #21262d' : 'none' }}>
+          <span style={{ fontSize: '0.8rem', color: '#8b949e', marginRight: '6px' }}>Domain Preset:</span>
+          {(Object.keys(DOMAIN_PRESETS) as DomainType[]).map((dKey) => {
+            const preset = DOMAIN_PRESETS[dKey];
+            const isSelected = activeDomain === dKey;
+            return (
+              <button
+                key={dKey}
+                onClick={() => handleSelectDomain(dKey)}
+                disabled={state !== 'idle'}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  border: isSelected ? '1px solid #1f6feb' : '1px solid #30363d',
+                  background: isSelected ? 'rgba(31, 111, 235, 0.15)' : '#21262d',
+                  color: isSelected ? '#58a6ff' : '#c9d1d9',
+                  cursor: state === 'idle' ? 'pointer' : 'not-allowed',
+                  fontSize: '0.85rem',
+                  fontWeight: isSelected ? 600 : 400,
+                }}
+              >
+                {preset.badge}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Expandable Configuration Body */}
+        {isConfigOpen && (
+          <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#c9d1d9', marginBottom: '6px' }}>
+                System Instructions & Domain Guidance:
+              </label>
+              <textarea
+                value={customInstructions}
+                onChange={(e) => setCustomInstructions(e.target.value)}
+                disabled={state !== 'idle'}
+                rows={4}
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  background: '#0d1117',
+                  border: '1px solid #30363d',
+                  borderRadius: '6px',
+                  color: '#f0f6fc',
+                  padding: '8px 12px',
+                  fontSize: '0.85rem',
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                }}
+              />
+
+              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#c9d1d9', marginTop: '12px', marginBottom: '6px' }}>
+                Opening Utterance / Initial Greeting:
+              </label>
+              <input
+                type="text"
+                value={customGreeting}
+                onChange={(e) => setCustomGreeting(e.target.value)}
+                disabled={state !== 'idle'}
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  background: '#0d1117',
+                  border: '1px solid #30363d',
+                  borderRadius: '6px',
+                  color: '#f0f6fc',
+                  padding: '8px 12px',
+                  fontSize: '0.85rem',
+                }}
+              />
+            </div>
+
+            <div>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#c9d1d9', marginBottom: '6px' }}>
+                  Target Contact & Scenario Context:
+                </label>
+                <input
+                  type="text"
+                  value={targetSubject}
+                  onChange={(e) => setTargetSubject(e.target.value)}
+                  disabled={state !== 'idle'}
+                  placeholder="Target Name / Person"
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    background: '#0d1117',
+                    border: '1px solid #30363d',
+                    borderRadius: '6px',
+                    color: '#f0f6fc',
+                    padding: '6px 12px',
+                    fontSize: '0.85rem',
+                    marginBottom: '8px',
+                  }}
+                />
+                <input
+                  type="text"
+                  value={targetContext}
+                  onChange={(e) => setTargetContext(e.target.value)}
+                  disabled={state !== 'idle'}
+                  placeholder="Scenario Context / Details"
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    background: '#0d1117',
+                    border: '1px solid #30363d',
+                    borderRadius: '6px',
+                    color: '#f0f6fc',
+                    padding: '6px 12px',
+                    fontSize: '0.85rem',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#c9d1d9', marginBottom: '6px' }}>
+                  Active Regulatory & Safety Guardrails:
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {activeGuardrails.map((rule, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#8b949e' }}>
+                      <span style={{ color: '#3fb950', fontWeight: 'bold' }}>✓</span>
+                      <span>{rule}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Top Banner & Control Bar */}
       <div
         style={{
@@ -212,13 +510,13 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
             fontSize: '1rem',
           }}
         >
-          {state === 'streaming' ? 'End Call' : state === 'connecting' ? 'Connecting...' : 'Start Call (債権回収)'}
+          {state === 'streaming' ? 'End Call' : state === 'connecting' ? 'Connecting...' : currentPreset.actionText}
         </button>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '0.85rem', color: '#8b949e' }}>
-          <span>Target Debtor: <strong>山田 太郎 (Taro Yamada)</strong></span>
+          <span>Subject: <strong style={{ color: '#f0f6fc' }}>{targetSubject}</strong></span>
           <span>•</span>
-          <span>Debt: <strong>¥48,000 (みらいファイナンス)</strong></span>
+          <span>Context: <strong style={{ color: '#c9d1d9' }}>{targetContext}</strong></span>
           {isAgentSpeaking && (
             <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#58a6ff', fontWeight: 600, marginLeft: '8px' }}>
               <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#58a6ff' }} />
@@ -242,7 +540,7 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
                 cursor: 'pointer',
               }}
             >
-              Inspect This Call in Inspector →
+              Inspect Call in Inspector →
             </button>
           )}
 
@@ -292,90 +590,189 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
             overflow: 'hidden',
           }}
         >
-          <div style={{ padding: '12px 16px', background: '#161b22', borderBottom: '1px solid #30363d', fontSize: '0.85rem', fontWeight: 600, color: '#f0f6fc' }}>
-            Live Conversation Stream
+          <div style={{ padding: '12px 16px', background: '#161b22', borderBottom: '1px solid #30363d', fontSize: '0.85rem', fontWeight: 600, color: '#f0f6fc', display: 'flex', justifyContent: 'space-between' }}>
+            <span>Live Conversation Stream</span>
+            <span style={{ fontSize: '0.75rem', color: '#8b949e' }}>Domain: {currentPreset.title}</span>
           </div>
 
           {entries.length === 0 ? (
             <div style={{ padding: '48px', textAlign: 'center', color: '#484f58' }}>
-              Click &quot;Start Call&quot; to speak. Speak your name and birthday (e.g. &quot;はい、山田です。1985年3月15日です&quot;) to verify identity.
+              <div style={{ fontSize: '2rem', marginBottom: '12px' }}>🎙️</div>
+              <div>Click <strong>{currentPreset.actionText}</strong> to begin.</div>
+              <div style={{ fontSize: '0.8rem', marginTop: '6px' }}>Speak in Japanese or English to test real-time ASR, agent reasoning, and sub-25ms barge-in.</div>
             </div>
           ) : (
-            <Captions entries={entries} />
+            <div style={{ padding: '16px', maxHeight: '480px', overflowY: 'auto' }}>
+              <Captions entries={entries} />
+            </div>
           )}
         </div>
 
-        {/* Right Column: State Indicator & Compliance Event Feed */}
+        {/* Right Column: Dynamic Domain State Indicators & Streaming Compliance Feed */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Card 1: State Machine Indicators */}
-          <div style={{ background: '#161b22', border: '1px solid #30363d', borderRadius: '8px', padding: '16px' }}>
-            <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#f0f6fc', margin: '0 0 12px 0' }}>
-              Real-Time Agent State Indicators
-            </h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.8rem' }}>
-              <div style={{ background: '#0d1117', padding: '8px', borderRadius: '4px' }}>
-                <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Current Phase</div>
-                <div style={{ fontWeight: 600, color: '#58a6ff' }}>{callPhase}</div>
-              </div>
-
-              <div style={{ background: '#0d1117', padding: '8px', borderRadius: '4px' }}>
-                <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Identity Verified</div>
-                <div style={{ fontWeight: 600, color: identityVerified ? '#3fb950' : '#d29922' }}>
-                  {identityVerified ? '✓ Verified' : '⚠ Pending'}
-                </div>
-              </div>
-
-              <div style={{ background: '#0d1117', padding: '8px', borderRadius: '4px' }}>
-                <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Disclosure Done</div>
-                <div style={{ fontWeight: 600, color: disclosureDone ? '#3fb950' : '#8b949e' }}>
-                  {disclosureDone ? '✓ Completed' : '— Pending'}
-                </div>
-              </div>
-
-              <div style={{ background: '#0d1117', padding: '8px', borderRadius: '4px' }}>
-                <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Stop Contact Flag</div>
-                <div style={{ fontWeight: 600, color: stopContact ? '#f85149' : '#3fb950' }}>
-                  {stopContact ? 'ACTIVE (Suppressed)' : 'None'}
-                </div>
-              </div>
+          {/* Dynamic Domain State Indicators Card */}
+          <div
+            style={{
+              padding: '16px',
+              background: '#161b22',
+              borderRadius: '8px',
+              border: '1px solid #30363d',
+            }}
+          >
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#f0f6fc', marginBottom: '12px' }}>
+              Workflow State Machine ({currentPreset.title})
             </div>
+
+            {activeDomain === 'collections' && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
+                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
+                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Phase</div>
+                  <div style={{ color: '#f0f6fc', fontWeight: 600 }}>{callPhase.toUpperCase()}</div>
+                </div>
+                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
+                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Identity Verified</div>
+                  <div style={{ color: identityVerified ? '#3fb950' : '#8b949e', fontWeight: 600 }}>
+                    {identityVerified ? '✓ VERIFIED' : 'PENDING'}
+                  </div>
+                </div>
+                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
+                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Disclosure Done</div>
+                  <div style={{ color: disclosureDone ? '#3fb950' : '#8b949e', fontWeight: 600 }}>
+                    {disclosureDone ? 'COMPLETED' : 'NO'}
+                  </div>
+                </div>
+                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
+                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Stop Contact</div>
+                  <div style={{ color: stopContact ? '#f85149' : '#3fb950', fontWeight: 600 }}>
+                    {stopContact ? 'TRIGGERED' : 'CLEAR'}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeDomain === 'screening' && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
+                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
+                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Screening Stage</div>
+                  <div style={{ color: '#f0f6fc', fontWeight: 600 }}>{screeningStage.toUpperCase()}</div>
+                </div>
+                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
+                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Qualification</div>
+                  <div style={{ color: screeningQualified ? '#3fb950' : '#d29922', fontWeight: 600 }}>
+                    {screeningQualified ? '✓ QUALIFIED' : 'EVALUATING'}
+                  </div>
+                </div>
+                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
+                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Anti-Bias Guard</div>
+                  <div style={{ color: '#3fb950', fontWeight: 600 }}>ACTIVE</div>
+                </div>
+                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
+                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Handoff Recruiter</div>
+                  <div style={{ color: screeningQualified ? '#58a6ff' : '#8b949e', fontWeight: 600 }}>
+                    {screeningQualified ? 'READY' : 'PENDING'}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeDomain === 'kyc' && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
+                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
+                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>KYC Authentication</div>
+                  <div style={{ color: identityVerified ? '#3fb950' : '#d29922', fontWeight: 600 }}>
+                    {identityVerified ? '✓ AUTHENTICATED' : 'IN PROGRESS'}
+                  </div>
+                </div>
+                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
+                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Fraud Scan</div>
+                  <div style={{ color: '#3fb950', fontWeight: 600 }}>CLEAR</div>
+                </div>
+                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px', gridColumn: 'span 2' }}>
+                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Inquiry Status</div>
+                  <div style={{ color: kycResolved ? '#3fb950' : '#58a6ff', fontWeight: 600 }}>
+                    {kycResolved ? 'RESOLVED' : 'ACTIVE INQUIRY'}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeDomain === 'custom' && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
+                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
+                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Custom Agent</div>
+                  <div style={{ color: '#58a6ff', fontWeight: 600 }}>ACTIVE</div>
+                </div>
+                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
+                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Guardrails</div>
+                  <div style={{ color: '#3fb950', fontWeight: 600 }}>{activeGuardrails.length} ENFORCED</div>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Card 2: Streaming Compliance Event Feed */}
-          <div style={{ background: '#161b22', border: '1px solid #30363d', borderRadius: '8px', padding: '16px', minHeight: '260px' }}>
+          {/* Streaming Compliance & Safety Ticker */}
+          <div
+            style={{
+              padding: '16px',
+              background: '#161b22',
+              borderRadius: '8px',
+              border: '1px solid #30363d',
+              maxHeight: '260px',
+              overflowY: 'auto',
+            }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#f0f6fc', margin: 0 }}>
-                Streaming Compliance Event Feed
-              </h4>
-              <span style={{ fontSize: '0.7rem', color: '#3fb950' }}>● Live Guard</span>
+              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#f0f6fc' }}>
+                Streaming Compliance & Events
+              </span>
+              <span style={{ fontSize: '0.7rem', color: '#8b949e' }}>Real-time</span>
             </div>
 
             {eventsFeed.length === 0 ? (
-              <div style={{ padding: '24px', textAlign: 'center', color: '#484f58', fontSize: '0.8rem' }}>
-                No compliance events triggered yet. Asking for debt amount before verification will trigger a guard event here.
+              <div style={{ fontSize: '0.8rem', color: '#8b949e', fontStyle: 'italic', padding: '12px 0' }}>
+                No events recorded yet. Guards active.
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
-                {eventsFeed.map((ev, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      padding: '8px 10px',
-                      borderRadius: '6px',
-                      fontSize: '0.8rem',
-                      background: ev.type === 'compliance_block' ? 'rgba(248, 81, 73, 0.1)' : 'rgba(56, 139, 253, 0.08)',
-                      border: `1px solid ${ev.type === 'compliance_block' ? 'rgba(248, 81, 73, 0.3)' : 'rgba(56, 139, 253, 0.2)'}`,
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
-                      <span style={{ fontWeight: 600, color: ev.type === 'compliance_block' ? '#f85149' : '#58a6ff' }}>
-                        {ev.type === 'compliance_block' ? `🛡️ Block [${ev.rule}]` : ev.type}
-                      </span>
-                      <span style={{ fontSize: '0.7rem', color: '#8b949e' }}>{ev.time}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {eventsFeed.map((ev, index) => {
+                  let badgeBg = '#21262d';
+                  let badgeColor = '#c9d1d9';
+
+                  if (ev.type === 'compliance_block') {
+                    badgeBg = 'rgba(248, 81, 73, 0.15)';
+                    badgeColor = '#f85149';
+                  } else if (ev.type === 'identity_verified' || ev.type === 'candidate_qualified' || ev.type === 'promise_to_pay') {
+                    badgeBg = 'rgba(63, 185, 80, 0.15)';
+                    badgeColor = '#3fb950';
+                  } else if (ev.type === 'interrupt') {
+                    badgeBg = 'rgba(210, 153, 34, 0.15)';
+                    badgeColor = '#d29922';
+                  } else if (ev.type === 'escalate' || ev.type === 'stop_contact') {
+                    badgeBg = 'rgba(163, 113, 247, 0.15)';
+                    badgeColor = '#a371f7';
+                  }
+
+                  return (
+                    <div
+                      key={index}
+                      style={{
+                        padding: '8px 10px',
+                        background: badgeBg,
+                        border: `1px solid ${badgeColor}33`,
+                        borderRadius: '6px',
+                        fontSize: '0.8rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                        <span style={{ fontWeight: 600, color: badgeColor, textTransform: 'uppercase', fontSize: '0.7rem' }}>
+                          {ev.type}
+                        </span>
+                        <span style={{ color: '#8b949e', fontSize: '0.65rem' }}>{ev.time}</span>
+                      </div>
+                      <div style={{ color: '#f0f6fc' }}>{ev.text}</div>
                     </div>
-                    <div style={{ color: '#c9d1d9', fontSize: '0.75rem' }}>{ev.text}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

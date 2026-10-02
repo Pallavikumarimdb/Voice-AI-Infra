@@ -58,3 +58,24 @@ def test_session_lifecycle():
     end_resp = client.post("/session/end", json={"sessionId": "s_lifecycle"})
     assert end_resp.status_code == 200
     assert end_resp.json()["status"] == "ended"
+
+def test_screening_turn_interaction():
+    session_id = "s_screening_001"
+    req_payload = {
+        "sessionId": session_id,
+        "uttId": 1,
+        "text": "はい、佐藤です。よろしくお願いします。",
+        "tCaptureMs": 1700000000000,
+        "config": {
+            "domain": "screening",
+            "instructions": "Screen candidate for senior backend role",
+            "context": {"candidateName": "佐藤 健一", "targetRole": "リードエンジニア"}
+        },
+        "context": []
+    }
+    resp = client.post("/turn", json=req_payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "佐藤 健一" in data["text"] or "採用" in data["text"]
+    assert "events" in data
+    assert any(e["payload"].get("domain") == "screening" for e in data["events"])

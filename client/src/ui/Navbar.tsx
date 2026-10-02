@@ -41,10 +41,10 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onSelectTab, isSample
           </div>
           <div>
             <div style={{ fontSize: '1rem', fontWeight: 600, color: '#f0f6fc' }}>
-              Voice AI Reviewer
+              VoiceAI Platform
             </div>
             <div style={{ fontSize: '0.7rem', color: '#8b949e' }}>
-              Japanese Collections & Validation Suite
+              Multi-Purpose Regulated Voice Agent & Validation Suite
             </div>
           </div>
         </div>
@@ -64,7 +64,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onSelectTab, isSample
               color: activeTab === 'live' ? '#fff' : '#c9d1d9',
             }}
           >
-            Live Call
+            Live Agent Studio
           </button>
 
           <button

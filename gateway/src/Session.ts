@@ -18,6 +18,7 @@ export interface Session {
   isAgentSpeaking: boolean;
   currentSpeakingUttId?: number;
   currentTTSAbort?: AbortController;
+  config?: Record<string, any>;
 }
 
 export class SessionManager {

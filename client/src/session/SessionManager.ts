@@ -1,5 +1,5 @@
 import { WORKLET_CODE } from '../audio/worklet';
-import { packAudioFrame, GatewayMessage } from '@voice/protocol';
+import { packAudioFrame, GatewayMessage, AgentConfig } from '@voice/protocol';
 
 export type SessionState = 'idle' | 'connecting' | 'streaming' | 'reconnecting';
 
@@ -31,7 +31,12 @@ export class SessionManager {
     this.callbacks.onStateChange(state);
   }
 
-  async start(srcLang = 'ja', tgtLang = 'en', mode: 'translate' | 'agent' = 'agent'): Promise<void> {
+  async start(
+    srcLang = 'ja',
+    tgtLang = 'en',
+    mode: 'translate' | 'agent' = 'agent',
+    config?: AgentConfig
+  ): Promise<void> {
     if (this.state !== 'idle') return;
 
     this.setState('connecting');
@@ -50,6 +55,7 @@ export class SessionManager {
             srcLang,
             tgtLang,
             sampleRate: 16000,
+            config,
           })
         );
         await this.initAudioCapture();

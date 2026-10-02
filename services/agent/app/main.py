@@ -21,14 +21,16 @@ from .audit import AuditLogger
 from .handoff import generate_handoff_summary
 from .state import CallState
 from .compliance.guard import ComplianceGuard
+from .generalized import GeneralizedVoiceAgent
 
-app = FastAPI(title="Voice Collections Agent Service", version="0.1.0")
+app = FastAPI(title="Voice Agent Service", version="0.1.0")
 
 # Pre-instantiate agents
 guard = ComplianceGuard()
 graph_agent = CollectionsGraphAgent(guard=guard, enable_slow_path=True)
 graph_agent_fast_only = CollectionsGraphAgent(guard=guard, enable_slow_path=False)
 baseline_agent = BaselineCollectionsAgent(guard=guard)
+generalized_agent = GeneralizedVoiceAgent(guard=guard)
 
 # Prometheus Metrics
 AGENT_TURN_LATENCY = Histogram(
@@ -155,16 +157,25 @@ async def turn(req: BrainRequest) -> BrainResponse:
     state = session_data["state"]
     audit_logger = session_data["audit_logger"]
 
-    # Select engine
-    if variant == "v1_baseline":
-        agent = baseline_agent
-    elif variant == "v2_graph_no_slow_path":
-        agent = graph_agent_fast_only
-    else:
-        agent = graph_agent
+    # Check for domain configuration
+    cfg = req.config or session_data.get("config", {})
+    domain = cfg.get("domain", "collections")
 
     with AGENT_TURN_LATENCY.labels(stage="turn_total").time():
-        turn_result = agent.process_turn(req.sessionId, req.text, state, audit_logger)
+        if domain in ["screening", "kyc", "custom"]:
+            turn_result = generalized_agent.process_turn(
+                req.sessionId, req.text, state, config=cfg, audit_logger=audit_logger
+            )
+        else:
+            # Select engine for collections
+            if variant == "v1_baseline":
+                agent = baseline_agent
+            elif variant == "v2_graph_no_slow_path":
+                agent = graph_agent_fast_only
+            else:
+                agent = graph_agent
+
+            turn_result = agent.process_turn(req.sessionId, req.text, state, audit_logger)
         
         reply_text = turn_result["text"]
         raw_events = turn_result.get("events", [])

@@ -127,6 +127,7 @@ wss.on('connection', (clientWs: WebSocket) => {
                 uttId: currentUttId,
                 text: currentText,
                 tCaptureMs: sttMsg.tCapture,
+                config: session.config,
                 context: session.contextWindow.slice(-5),
               });
 
@@ -296,9 +297,12 @@ wss.on('connection', (clientWs: WebSocket) => {
           if (msg.mode) {
             session.mode = msg.mode;
           }
+          if (msg.config) {
+            session.config = msg.config;
+          }
           session.isStarted = true;
           connectSTT();
-          sendJson(clientWs, { type: 'started', sessionId, mode: session.mode });
+          sendJson(clientWs, { type: 'started', sessionId, mode: session.mode, config: session.config });
         } else if (msg.type === 'stop') {
           session.isStarted = false;
           if (session.sttWs && session.sttWs.readyState === WebSocket.OPEN) {
