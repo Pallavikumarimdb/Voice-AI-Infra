@@ -7,9 +7,17 @@ agent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if agent_dir not in sys.path:
     sys.path.insert(0, agent_dir)
 
-from app.main import app
+from datetime import datetime
+import app.main as agent_main
+from app.compliance.clock import FakeClock, TOKYO_TZ
 
-client = TestClient(app)
+# Inject daytime clock (14:00 Tokyo) for deterministic test execution
+test_clock = FakeClock(datetime(2026, 10, 2, 14, 0, tzinfo=TOKYO_TZ))
+agent_main.guard.clock = test_clock
+agent_main.graph_agent.guard.clock = test_clock
+agent_main.baseline_agent.guard.clock = test_clock
+
+client = TestClient(agent_main.app)
 
 def test_healthz():
     resp = client.get("/healthz")
@@ -18,11 +26,16 @@ def test_healthz():
     assert data["status"] == "ok"
     assert data["service"] == "agent"
 
-def test_turn_echo():
+def test_turn_interaction():
+    session_id = "s_test_api_123"
+    # Start session
+    start_resp = client.post("/session/start", json={"sessionId": session_id, "debtorId": "deb_001"})
+    assert start_resp.status_code == 200
+
     req_payload = {
-        "sessionId": "s_test_123",
+        "sessionId": session_id,
         "uttId": 1,
-        "text": "田中です",
+        "text": "もしもし",
         "tCaptureMs": 1700000000000,
         "context": []
     }
@@ -30,13 +43,10 @@ def test_turn_echo():
     assert resp.status_code == 200
     data = resp.json()
     assert "text" in data
-    assert "田中です" in data["text"]
     assert "events" in data
     assert len(data["events"]) > 0
-    assert data["events"][0]["type"] == "state_change"
     assert "metrics" in data
     assert data["metrics"]["tokensIn"] > 0
-    assert data["metrics"]["model"] == "agent_stub_v0"
 
 def test_session_lifecycle():
     # Start session

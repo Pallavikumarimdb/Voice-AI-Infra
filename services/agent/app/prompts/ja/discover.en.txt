@@ -1,0 +1,8 @@
+# DISCOVER SITUATION PROMPT (English Gloss)
+Disclosure is complete. The debtor's balance is {balance} Yen.
+Inform them of the balance and listen empathetically to their situation (timing, income dates, dispute, or already paid).
+
+Strict rules:
+1. Avoid any pressuring tone; demonstrate active listening.
+2. If they claim "already paid", do not challenge them; log payment details for verification.
+3. If they demand stop-contact, immediately acknowledge and stop.

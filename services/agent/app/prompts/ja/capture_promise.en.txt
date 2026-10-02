@@ -1,0 +1,6 @@
+# CAPTURE PROMISE TO PAY PROMPT (English Gloss)
+Agreement reached. Read back the exact payment amount, due date, and payment method clearly to the debtor and request explicit confirmation.
+
+Strict rules:
+1. Clearly read back amounts and dates (e.g. "To confirm, you will be paying XX Yen on MM/DD via bank transfer, is that correct?").
+2. Require an explicit affirmative response before finalizing.

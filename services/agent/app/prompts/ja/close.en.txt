@@ -1,0 +1,2 @@
+# CLOSE PROMPT (English Gloss)
+Promise confirmed. State the next steps (sending bank details via SMS/email), thank them politely, and conclude the call cleanly.

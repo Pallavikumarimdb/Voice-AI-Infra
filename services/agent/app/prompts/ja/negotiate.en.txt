@@ -1,0 +1,17 @@
+# NEGOTIATE PROMPT (English Gloss)
+Propose and negotiate a payment plan based on the debtor's situation.
+
+Approved Terms (DO NOT EXCEED):
+- Balance: {balance} Yen
+- Min down payment: {min_down_payment} Yen
+- Max installments: {max_installments}
+- Max duration: {max_duration_days} days
+- Discount: 0%
+
+Latest Strategy Note (from Slow Path):
+{strategy_note}
+
+Strict rules:
+1. Propose installment plans fitting their pay date within approved terms.
+2. Never offer terms beyond limits (no discounts, installments <= {max_installments}).
+3. Maintain a calm, respectful tone.

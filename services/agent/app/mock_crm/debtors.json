@@ -1,0 +1,64 @@
+{
+  "deb_001": {
+    "debtor_id": "deb_001",
+    "name": "田中 健一",
+    "name_kana": "タナカ ケンイチ",
+    "phone": "090-1234-5678",
+    "dob": "1985-04-12",
+    "postal_code": "150-0001",
+    "creditor": "サクラ信託サービス",
+    "original_balance": 48000,
+    "current_balance": 48000,
+    "due_date": "2026-08-15",
+    "approved_terms": {
+      "min_down_payment": 5000,
+      "max_installments": 6,
+      "max_duration_days": 180,
+      "max_discount_pct": 0
+    },
+    "contact_history": [
+      { "date": "2026-09-28", "channel": "phone", "outcome": "no_answer" }
+    ],
+    "stop_contact": false
+  },
+  "deb_002": {
+    "debtor_id": "deb_002",
+    "name": "佐藤 美咲",
+    "name_kana": "サトウ ミサキ",
+    "phone": "080-9876-5432",
+    "dob": "1992-09-23",
+    "postal_code": "160-0022",
+    "creditor": "ミドリ決済機構",
+    "original_balance": 120000,
+    "current_balance": 120000,
+    "due_date": "2026-07-31",
+    "approved_terms": {
+      "min_down_payment": 10000,
+      "max_installments": 12,
+      "max_duration_days": 360,
+      "max_discount_pct": 0
+    },
+    "contact_history": [],
+    "stop_contact": false
+  },
+  "deb_003": {
+    "debtor_id": "deb_003",
+    "name": "鈴木 一郎",
+    "name_kana": "スズキ イチロウ",
+    "phone": "070-5555-1234",
+    "dob": "1978-11-05",
+    "postal_code": "100-0005",
+    "creditor": "アオバファイナンス",
+    "original_balance": 35000,
+    "current_balance": 35000,
+    "due_date": "2026-09-01",
+    "approved_terms": {
+      "min_down_payment": 5000,
+      "max_installments": 3,
+      "max_duration_days": 90,
+      "max_discount_pct": 0
+    },
+    "contact_history": [],
+    "stop_contact": false
+  }
+}
