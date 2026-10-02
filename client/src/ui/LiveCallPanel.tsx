@@ -3,6 +3,7 @@ import { SessionManager, SessionState } from '../session/SessionManager';
 import { GatewayMessage, AgentConfig } from '@voice/protocol';
 import { Captions, CaptionEntry } from './Captions';
 import { LatencyHUD } from './LatencyHUD';
+import { PageHeader, Badge } from './primitives.tsx';
 
 export type DomainType = 'collections' | 'screening' | 'kyc' | 'custom';
 export type AgentLanguage = 'ja' | 'en';
@@ -22,94 +23,62 @@ interface DomainPreset {
 const DOMAIN_PRESETS: Record<AgentLanguage, Record<DomainType, DomainPreset>> = {
   ja: {
     collections: {
-      id: 'collections',
-      title: 'Collections & AR',
-      badge: '💼 債権回収',
-      actionText: 'Start Call (債権回収)',
-      targetLabel: '山田 太郎 (Taro Yamada)',
-      contextDesc: 'Debt: ¥48,000 • Creditor: みらいファイナンス',
+      id: 'collections', title: 'Collections', badge: 'Collections', actionText: 'Start collections call',
+      targetLabel: '山田 太郎 (Taro Yamada)', contextDesc: 'Debt: ¥48,000 · Creditor: みらいファイナンス',
       greeting: 'もしもし、山田太郎様のお電話でお間違いないでしょうか？私、みらい債権回収センターのAIオペレーターでございます。',
-      instructions: 'Maintain polite Japanese Keigo (です・ます). Strictly verify debtor identity with Date of Birth before disclosing amount. If debtor mentions financial hardship, offer structured installment plans up to 6 months.',
-      guardrails: ['DOB Verification Required', 'Calling Hours (08:00-21:00 JST)', 'Third-Party Disclosure Ban', 'Civility Filter']
+      instructions: 'Maintain polite Japanese Keigo. Verify identity with Date of Birth before disclosing amount.',
+      guardrails: ['DOB verification', 'Calling hours 08:00–21:00 JST', 'Third-party disclosure ban', 'Civility filter']
     },
     screening: {
-      id: 'screening',
-      title: 'Candidate Screening',
-      badge: '🎯 採用スクリーニング',
-      actionText: 'Start Call (採用選考)',
-      targetLabel: '佐藤 健一 (Kenichi Sato)',
-      contextDesc: 'Role: Senior Full-Stack Engineer • Level: Lead',
-      greeting: '佐藤様、本日は面談のお時間をいただきありがとうございます。AI採用アシスタントとして、ご経歴と転職のご希望条件について数点お伺いいたします。',
-      instructions: 'Conduct a professional, warm 5-minute first-round screening interview. Ask about: 1) Recent experience with React & distributed systems, 2) Preferred working model (remote vs hybrid), 3) Expected compensation range. Validate answers concisely.',
-      guardrails: ['Anti-Discrimination Guard', 'Salary Range Cap Check', 'Strict NDA & Privacy', 'Civility Filter']
+      id: 'screening', title: 'Screening', badge: 'Screening', actionText: 'Start screening call',
+      targetLabel: '佐藤 健一 (Kenichi Sato)', contextDesc: 'Role: Senior Full-Stack Engineer · Lead',
+      greeting: '佐藤様、本日は面談のお時間をいただきありがとうございます。',
+      instructions: 'Conduct a professional 5-minute first-round screening interview.',
+      guardrails: ['Anti-discrimination guard', 'Salary range check', 'NDA & privacy', 'Civility filter']
     },
     kyc: {
-      id: 'kyc',
-      title: 'Customer KYC & Support',
-      badge: '🛡️ 本人確認・サポート',
-      actionText: 'Start Call (本人確認)',
-      targetLabel: '鈴木 一郎 (Ichiro Suzuki)',
-      contextDesc: 'Account: ACC-88219 • Security Tier: 2',
-      greeting: 'お電話ありがとうございます。カスタマーサポートAIでございます。お手続きの前にご本人様確認を実施させていただきます。',
-      instructions: 'Authenticate customer by confirming registered phone number and 4-digit security PIN. Assist with account inquiry once authenticated. Never reveal plaintext PIN or sensitive billing data unverified.',
-      guardrails: ['2-Factor PIN Authentication', 'PII Masking Guard', 'Fraud Suspicion Auto-Flag', 'Civility Filter']
+      id: 'kyc', title: 'KYC & support', badge: 'KYC', actionText: 'Start KYC call',
+      targetLabel: '鈴木 一郎 (Ichiro Suzuki)', contextDesc: 'Account: ACC-88219 · Tier 2',
+      greeting: 'お電話ありがとうございます。カスタマーサポートAIでございます。',
+      instructions: 'Authenticate by phone number and 4-digit PIN before assisting.',
+      guardrails: ['2-factor PIN auth', 'PII masking', 'Fraud auto-flag', 'Civility filter']
     },
     custom: {
-      id: 'custom',
-      title: 'Custom Enterprise Agent',
-      badge: '⚡ カスタム',
-      actionText: 'Start Call (カスタムAI)',
-      targetLabel: 'Target Contact',
-      contextDesc: 'Custom Scenario & Enterprise Parameters',
-      greeting: 'お電話ありがとうございます。AIアシスタントでございます。どのようなご用件でしょうか。',
-      instructions: 'Act as a professional enterprise voice agent. Follow customer instructions, maintain high empathy, and protect customer data.',
-      guardrails: ['Custom Regulatory Guard', 'PII Protection', 'Civility Filter']
+      id: 'custom', title: 'Custom', badge: 'Custom', actionText: 'Start custom call',
+      targetLabel: 'Target contact', contextDesc: 'Custom scenario',
+      greeting: 'お電話ありがとうございます。AIアシスタントでございます。',
+      instructions: 'Act as a professional enterprise voice agent.',
+      guardrails: ['Regulatory guard', 'PII protection', 'Civility filter']
     }
   },
   en: {
     collections: {
-      id: 'collections',
-      title: 'Collections & AR',
-      badge: '💼 Collections (AR)',
-      actionText: 'Start Call (Collections)',
-      targetLabel: 'Alex Johnson',
-      contextDesc: 'Balance: $350.00 • Creditor: Apex Capital Services',
+      id: 'collections', title: 'Collections', badge: 'Collections', actionText: 'Start collections call',
+      targetLabel: 'Alex Johnson', contextDesc: 'Balance: $350.00 · Creditor: Apex Capital',
       greeting: 'Hello, this is Accounts Management calling for Alex Johnson. Am I speaking with Alex?',
-      instructions: 'Maintain professional, empathetic tone. Strictly verify identity before disclosing balance. Offer 3 to 6-month installment plans if hardship is mentioned.',
-      guardrails: ['FDCPA Compliance Verified', 'Calling Hours (08:00-21:00 Local)', 'Third-Party Disclosure Ban', 'Civility & Anti-Harassment']
+      instructions: 'Maintain professional tone. Verify identity before disclosing balance.',
+      guardrails: ['FDCPA compliance', 'Calling hours 08:00–21:00 local', 'Third-party disclosure ban', 'Civility filter']
     },
     screening: {
-      id: 'screening',
-      title: 'Candidate Screening',
-      badge: '🎯 Candidate Screening',
-      actionText: 'Start Call (Screening)',
-      targetLabel: 'Alex Johnson',
-      contextDesc: 'Role: Senior Software Engineer • Level: Lead',
-      greeting: 'Hello Alex, thank you for making time to speak today! I am your AI recruiting assistant conducting your first-round interview for the Senior Software Engineer position.',
-      instructions: 'Conduct a warm, professional 5-minute first-round interview. Inquire about: 1) System architecture & modern tech stacks, 2) Preferred work mode (remote/hybrid), 3) Expected salary range. Validate answers concisely.',
-      guardrails: ['Equal Opportunity / EEOC Guard', 'Compensation Fairness Cap', 'Strict NDA & Privacy', 'Civility Filter']
+      id: 'screening', title: 'Screening', badge: 'Screening', actionText: 'Start screening call',
+      targetLabel: 'Alex Johnson', contextDesc: 'Role: Senior Software Engineer · Lead',
+      greeting: 'Hello Alex, thank you for making time to speak today.',
+      instructions: 'Conduct a warm 5-minute first-round interview.',
+      guardrails: ['EEO guard', 'Compensation fairness', 'NDA & privacy', 'Civility filter']
     },
     kyc: {
-      id: 'kyc',
-      title: 'Customer KYC & Support',
-      badge: '🛡️ Customer KYC & Support',
-      actionText: 'Start Call (KYC)',
-      targetLabel: 'John Smith',
-      contextDesc: 'Account: ACC-88219 • Security Tier: Level 2',
-      greeting: 'Thank you for calling Customer Support. I am your AI verification specialist. Am I speaking with John Smith?',
-      instructions: 'Authenticate customer by confirming registered phone number and 4-digit PIN. Assist with account inquiries once verified. Never disclose sensitive billing info unverified.',
-      guardrails: ['Two-Factor PIN Authentication', 'PII Data Masking', 'Suspicious Activity Detection', 'Civility Filter']
+      id: 'kyc', title: 'KYC & support', badge: 'KYC', actionText: 'Start KYC call',
+      targetLabel: 'John Smith', contextDesc: 'Account: ACC-88219 · Level 2',
+      greeting: 'Thank you for calling Customer Support.',
+      instructions: 'Authenticate by phone number and 4-digit PIN before assisting.',
+      guardrails: ['2-factor PIN auth', 'PII masking', 'Fraud detection', 'Civility filter']
     },
     custom: {
-      id: 'custom',
-      title: 'Custom Enterprise Agent',
-      badge: '⚡ Custom Agent',
-      actionText: 'Start Call (Custom Agent)',
-      targetLabel: 'Target Contact',
-      contextDesc: 'Enterprise Custom Workflow',
-      greeting: 'Hello! Thank you for calling. I am your enterprise voice AI assistant. How may I assist you today?',
-      instructions: 'Act as a professional enterprise voice agent. Follow customer instructions, maintain high empathy, and protect customer data.',
-      guardrails: ['Enterprise Compliance Guard', 'PII Data Protection', 'Civility Filter']
+      id: 'custom', title: 'Custom', badge: 'Custom', actionText: 'Start custom call',
+      targetLabel: 'Target contact', contextDesc: 'Custom workflow',
+      greeting: 'Hello! Thank you for calling.',
+      instructions: 'Act as a professional enterprise voice agent.',
+      guardrails: ['Enterprise compliance', 'PII protection', 'Civility filter']
     }
   }
 };
@@ -129,36 +98,26 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Dynamic Domain & Agent Configuration state
   const [agentLanguage, setAgentLanguage] = useState<AgentLanguage>('ja');
   const [activeDomain, setActiveDomain] = useState<DomainType>('collections');
-  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [customGreeting, setCustomGreeting] = useState(DOMAIN_PRESETS.ja.collections.greeting);
   const [customInstructions, setCustomInstructions] = useState(DOMAIN_PRESETS.ja.collections.instructions);
   const [targetContext, setTargetContext] = useState(DOMAIN_PRESETS.ja.collections.contextDesc);
   const [targetSubject, setTargetSubject] = useState(DOMAIN_PRESETS.ja.collections.targetLabel);
   const [activeGuardrails, setActiveGuardrails] = useState<string[]>(DOMAIN_PRESETS.ja.collections.guardrails);
-  const [configTab, setConfigTab] = useState<'prompt' | 'context' | 'guardrails'>('prompt');
   const [callSeconds, setCallSeconds] = useState(0);
 
-  // Auto-scroll ref for captions container
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
-  // Domain-specific state indicators
   const [callPhase, setCallPhase] = useState('greet');
   const [identityVerified, setIdentityVerified] = useState(false);
-  const [disclosureDone, setDisclosureDone] = useState(false);
   const [stopContact, setStopContact] = useState(false);
   const [promiseCaptured, setPromiseCaptured] = useState<string | null>(null);
-
-  // Candidate Screening indicators
   const [screeningQualified, setScreeningQualified] = useState(false);
   const [screeningStage, setScreeningStage] = useState('intro');
-
-  // KYC indicators
   const [kycResolved, setKycResolved] = useState(false);
 
-  // Streaming Compliance & Event Feed
   const [eventsFeed, setEventsFeed] = useState<Array<{ type: string; rule?: string; text?: string; time: string }>>([]);
   const [lastCompletedSessionId, setLastCompletedSessionId] = useState<string | null>(null);
 
@@ -166,27 +125,17 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
   const currentSessionIdRef = useRef<string | null>(null);
   const captureTimestampsRef = useRef<Map<number, number>>(new Map());
 
-  // Call duration timer
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
     if (state === 'streaming') {
       setCallSeconds(0);
-      interval = setInterval(() => {
-        setCallSeconds((s) => s + 1);
-      }, 1000);
-    } else {
-      if (interval) clearInterval(interval);
+      interval = setInterval(() => setCallSeconds((s) => s + 1), 1000);
     }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
+    return () => { if (interval) clearInterval(interval); };
   }, [state]);
 
-  // Auto-scroll chat on new captions
   useEffect(() => {
-    if (chatScrollRef.current) {
-      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-    }
+    if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
   }, [entries]);
 
   const formatDuration = (secs: number) => {
@@ -195,7 +144,6 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Handle switching preset
   const handleSelectDomain = (domain: DomainType) => {
     setActiveDomain(domain);
     const preset = DOMAIN_PRESETS[agentLanguage][domain];
@@ -206,7 +154,6 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
     setActiveGuardrails(preset.guardrails);
   };
 
-  // Handle switching language
   const handleSelectLanguage = (lang: AgentLanguage) => {
     setAgentLanguage(lang);
     const preset = DOMAIN_PRESETS[lang][activeDomain];
@@ -227,36 +174,24 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
         setState(newState);
         if (newState === 'idle') {
           setIsAgentSpeaking(false);
-          if (currentSessionIdRef.current) {
-            setLastCompletedSessionId(currentSessionIdRef.current);
-          }
+          if (currentSessionIdRef.current) setLastCompletedSessionId(currentSessionIdRef.current);
         }
       },
       onError: (err) => setError(err),
       onMessage: (msg: GatewayMessage) => {
         if (msg.type === 'error') {
-          console.error('[LiveCallPanel] Gateway error:', msg);
-          setError(msg.message || msg.code || 'Voice pipeline service error');
+          setError(msg.message || msg.code || 'Voice pipeline error');
           sessionManagerRef.current?.stop();
           setIsAgentSpeaking(false);
           return;
         }
         if (msg.type === 'hud') {
-          setHudData({
-            queueDepth: msg.queueDepth,
-            gpuUtil: msg.gpuUtil,
-            rtf: msg.rtf,
-          });
+          setHudData({ queueDepth: msg.queueDepth, gpuUtil: msg.gpuUtil, rtf: msg.rtf });
         } else if (msg.type === 'partial') {
           setEntries((prev) => {
             const index = prev.findIndex((e) => e.uttId === msg.uttId);
-            if (index >= 0) {
-              const updated = [...prev];
-              updated[index] = { ...updated[index], partialText: msg.text };
-              return updated;
-            } else {
-              return [...prev, { uttId: msg.uttId, partialText: msg.text }];
-            }
+            if (index >= 0) { const u = [...prev]; u[index] = { ...u[index], partialText: msg.text }; return u; }
+            return [...prev, { uttId: msg.uttId, partialText: msg.text }];
           });
         } else if (msg.type === 'final') {
           if (msg.tCapture && msg.tFinal) {
@@ -265,62 +200,34 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
           }
           setEntries((prev) => {
             const index = prev.findIndex((e) => e.uttId === msg.uttId);
-            if (index >= 0) {
-              const updated = [...prev];
-              updated[index] = { ...updated[index], finalText: msg.text, partialText: undefined };
-              return updated;
-            } else {
-              return [...prev, { uttId: msg.uttId, finalText: msg.text }];
-            }
+            if (index >= 0) { const u = [...prev]; u[index] = { ...u[index], finalText: msg.text, partialText: undefined }; return u; }
+            return [...prev, { uttId: msg.uttId, finalText: msg.text }];
           });
         } else if (msg.type === 'agent_text') {
           currentSessionIdRef.current = msg.sessionId;
-          if (msg.metrics?.llmMs) {
-            setAgentTurnLatencyMs(msg.metrics.llmMs);
-          }
-
-          // Process brain events
+          if (msg.metrics?.llmMs) setAgentTurnLatencyMs(msg.metrics.llmMs);
           if (msg.events) {
             for (const ev of msg.events) {
               const timeStr = new Date().toLocaleTimeString();
-              if (ev.type === 'identity_verified') {
-                setIdentityVerified(true);
-                setCallPhase('disclose');
-                setEventsFeed((prev) => [{ type: 'identity_verified', text: 'Identity verified successfully', time: timeStr }, ...prev]);
-              } else if (ev.type === 'promise_to_pay') {
+              if (ev.type === 'identity_verified') { setIdentityVerified(true); setCallPhase('disclose'); setEventsFeed((p) => [{ type: 'identity_verified', text: 'Identity verified', time: timeStr }, ...p]); }
+              else if (ev.type === 'promise_to_pay') {
                 const amt = ev.payload?.amount ? `¥${ev.payload.amount.toLocaleString()}` : '';
                 const date = ev.payload?.date || '';
                 setPromiseCaptured(`${amt} on ${date}`.trim());
                 setCallPhase('close');
-                setEventsFeed((prev) => [{ type: 'promise_to_pay', text: `Promise recorded: ${amt} on ${date}`, time: timeStr }, ...prev]);
-              } else if (ev.type === 'compliance_block') {
-                setEventsFeed((prev) => [{ type: 'compliance_block', rule: ev.payload?.rule || 'compliance_rule', text: ev.payload?.text || 'Guard intercepted unauthorized disclosure', time: timeStr }, ...prev]);
-              } else if (ev.type === 'escalate') {
-                setEventsFeed((prev) => [{ type: 'escalate', text: `Escalated to human supervisor: ${ev.payload?.reason || ''}`, time: timeStr }, ...prev]);
-              } else if (ev.type === 'stop_contact') {
-                setStopContact(true);
-                setEventsFeed((prev) => [{ type: 'stop_contact', text: 'Stop contact requested; added to suppress list', time: timeStr }, ...prev]);
-              } else if (ev.type === 'candidate_qualified') {
-                setScreeningQualified(true);
-                setScreeningStage('qualified');
-                setEventsFeed((prev) => [{ type: 'candidate_qualified', text: 'Candidate successfully qualified for next round', time: timeStr }, ...prev]);
-              } else if (ev.type === 'state_change') {
-                if (ev.payload?.stage) {
-                  setScreeningStage(ev.payload.stage);
-                }
+                setEventsFeed((p) => [{ type: 'promise_to_pay', text: `Promise: ${amt} on ${date}`, time: timeStr }, ...p]);
               }
+              else if (ev.type === 'compliance_block') setEventsFeed((p) => [{ type: 'compliance_block', rule: ev.payload?.rule || 'guard', text: ev.payload?.text || 'Guard intercepted disclosure', time: timeStr }, ...p]);
+              else if (ev.type === 'escalate') setEventsFeed((p) => [{ type: 'escalate', text: `Escalated: ${ev.payload?.reason || ''}`, time: timeStr }, ...p]);
+              else if (ev.type === 'stop_contact') { setStopContact(true); setEventsFeed((p) => [{ type: 'stop_contact', text: 'Stop-contact requested', time: timeStr }, ...p]); }
+              else if (ev.type === 'candidate_qualified') { setScreeningQualified(true); setScreeningStage('qualified'); setEventsFeed((p) => [{ type: 'candidate_qualified', text: 'Candidate qualified', time: timeStr }, ...p]); }
+              else if (ev.type === 'state_change' && ev.payload?.stage) setScreeningStage(ev.payload.stage);
             }
           }
-
           setEntries((prev) => {
             const index = prev.findIndex((e) => e.uttId === msg.uttId);
-            if (index >= 0) {
-              const updated = [...prev];
-              updated[index] = { ...updated[index], agentText: msg.text };
-              return updated;
-            } else {
-              return [...prev, { uttId: msg.uttId, agentText: msg.text }];
-            }
+            if (index >= 0) { const u = [...prev]; u[index] = { ...u[index], agentText: msg.text }; return u; }
+            return [...prev, { uttId: msg.uttId, agentText: msg.text }];
           });
         } else if (msg.type === 'agent_speech_start') {
           setIsAgentSpeaking(true);
@@ -328,40 +235,27 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
           if (tCapture) {
             const totalMs = Math.round(Date.now() - tCapture);
             setTotalRoundTripMs(totalMs);
-            if (asrCommitMs && agentTurnLatencyMs) {
-              const ttsMs = Math.max(0, totalMs - asrCommitMs - agentTurnLatencyMs);
-              setTtsFirstAudioMs(ttsMs);
-            }
+            if (asrCommitMs && agentTurnLatencyMs) setTtsFirstAudioMs(Math.max(0, totalMs - asrCommitMs - agentTurnLatencyMs));
           }
         } else if (msg.type === 'agent_speech_end') {
           setIsAgentSpeaking(false);
         } else if (msg.type === 'interrupt') {
           setIsAgentSpeaking(false);
           const timeStr = new Date().toLocaleTimeString();
-          setEventsFeed((prev) => [{ type: 'interrupt', text: 'Barge-in: User spoke during agent playback (<25ms cutoff)', time: timeStr }, ...prev]);
-
+          setEventsFeed((p) => [{ type: 'interrupt', text: 'Barge-in — playback cut off', time: timeStr }, ...p]);
           setEntries((prev) => {
-            if (msg.uttId !== undefined) {
-              const index = prev.findIndex((e) => e.uttId === msg.uttId);
-              if (index >= 0) {
-                const updated = [...prev];
-                updated[index] = { ...updated[index], interrupted: true };
-                return updated;
-              }
-            } else if (prev.length > 0) {
-              const updated = [...prev];
-              updated[updated.length - 1] = { ...updated[updated.length - 1], interrupted: true };
-              return updated;
-            }
-            return prev;
+            if (prev.length === 0) return prev;
+            const u = [...prev];
+            const idx = msg.uttId !== undefined ? prev.findIndex((e) => e.uttId === msg.uttId) : prev.length - 1;
+            const target = idx >= 0 ? idx : prev.length - 1;
+            u[target] = { ...u[target], interrupted: true };
+            return u;
           });
         }
       },
     });
-
-    return () => {
-      sessionManagerRef.current?.stop();
-    };
+    return () => { sessionManagerRef.current?.stop(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asrCommitMs, agentTurnLatencyMs]);
 
   const handleToggle = () => {
@@ -369,7 +263,6 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
       setError(null);
       setLastCompletedSessionId(null);
       setIdentityVerified(false);
-      setDisclosureDone(false);
       setStopContact(false);
       setPromiseCaptured(null);
       setScreeningQualified(false);
@@ -377,23 +270,11 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
       setKycResolved(false);
       setCallPhase('greet');
       setEventsFeed([]);
-
-      // Prepare agent config
       const agentConfig: AgentConfig = {
-        domain: activeDomain,
-        language: agentLanguage,
-        instructions: customInstructions,
-        greeting: customGreeting,
-        guardrails: activeGuardrails,
-        context: {
-          targetSubject,
-          contextDesc: targetContext,
-          candidateName: targetSubject,
-          customerName: targetSubject,
-          debtorName: targetSubject,
-        }
+        domain: activeDomain, language: agentLanguage,
+        instructions: customInstructions, greeting: customGreeting, guardrails: activeGuardrails,
+        context: { targetSubject, contextDesc: targetContext, candidateName: targetSubject, customerName: targetSubject, debtorName: targetSubject }
       };
-
       sessionManagerRef.current?.start(agentLanguage, agentLanguage, 'agent', agentConfig);
     } else {
       sessionManagerRef.current?.stop();
@@ -402,653 +283,148 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
   };
 
   const currentPreset = DOMAIN_PRESETS[agentLanguage][activeDomain];
+  const statusTone = state === 'streaming' ? 'success' : state === 'connecting' ? 'warning' : 'neutral';
+
+  const steps: { title: string; state: 'done' | 'active' | 'pending' }[] =
+    activeDomain === 'collections'
+      ? [
+        { title: 'Greeting & identity', state: callPhase !== 'greet' ? 'done' : 'active' },
+        { title: 'DOB verification', state: identityVerified ? 'done' : callPhase === 'greet' ? 'pending' : 'active' },
+        { title: 'Disclosure & hardship', state: callPhase === 'close' ? 'done' : callPhase === 'disclose' ? 'active' : 'pending' },
+        { title: 'Promise / escalation', state: promiseCaptured ? 'done' : callPhase === 'close' ? 'active' : 'pending' },
+      ]
+      : activeDomain === 'screening'
+        ? [
+          { title: 'Intro', state: screeningStage !== 'intro' ? 'done' : 'active' },
+          { title: 'Experience', state: screeningStage === 'qualified' || screeningStage === 'expectations' ? 'done' : screeningStage === 'experience' ? 'active' : 'pending' },
+          { title: 'Expectations', state: screeningStage === 'qualified' ? 'done' : screeningStage === 'expectations' ? 'active' : 'pending' },
+          { title: 'Verdict', state: screeningQualified ? 'done' : 'pending' },
+        ]
+        : [
+          { title: 'Greeting', state: 'done' },
+          { title: 'Verification', state: identityVerified ? 'done' : 'active' },
+          { title: 'Inquiry', state: identityVerified ? 'active' : 'pending' },
+          { title: 'Wrap-up', state: kycResolved ? 'done' : 'pending' },
+        ];
 
   return (
-    <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      
-      {/* Top Bar: Domain Persona Pills + Language Switcher + Studio Drawer Toggle */}
-      <div
-        className="glass-panel"
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px 18px',
-          gap: '12px',
-        }}
-      >
-        {/* Left: Domain Presets */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-tertiary)', marginRight: '4px' }}>
-            Domain
-          </span>
-          {(Object.keys(DOMAIN_PRESETS[agentLanguage]) as DomainType[]).map((dKey) => {
-            const preset = DOMAIN_PRESETS[agentLanguage][dKey];
-            const isSelected = activeDomain === dKey;
-            return (
-              <button
-                key={dKey}
-                onClick={() => handleSelectDomain(dKey)}
-                disabled={state !== 'idle'}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 14px',
-                  borderRadius: '8px',
-                  border: isSelected ? '1px solid rgba(99, 102, 241, 0.45)' : '1px solid var(--border-subtle)',
-                  background: isSelected ? 'rgba(99, 102, 241, 0.18)' : 'rgba(255, 255, 255, 0.03)',
-                  color: isSelected ? '#ffffff' : 'var(--text-secondary)',
-                  cursor: state === 'idle' ? 'pointer' : 'not-allowed',
-                  fontSize: '0.82rem',
-                  fontWeight: isSelected ? 600 : 500,
-                  boxShadow: isSelected ? '0 2px 10px rgba(99, 102, 241, 0.2)' : 'none',
-                }}
-              >
-                <span>{preset.badge}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Right: Language switch & Persona Studio drawer button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Language Switch */}
-          <div
-            style={{
-              display: 'inline-flex',
-              background: 'rgba(255, 255, 255, 0.04)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '8px',
-              padding: '2px',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => handleSelectLanguage('ja')}
-              disabled={state !== 'idle'}
-              style={{
-                padding: '4px 10px',
-                borderRadius: '6px',
-                border: 'none',
-                background: agentLanguage === 'ja' ? 'rgba(99, 102, 241, 0.3)' : 'transparent',
-                color: agentLanguage === 'ja' ? '#ffffff' : 'var(--text-secondary)',
-                fontWeight: agentLanguage === 'ja' ? 600 : 500,
-                cursor: state === 'idle' ? 'pointer' : 'not-allowed',
-                fontSize: '0.78rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <span>🇯🇵</span>
-              <span>JA</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSelectLanguage('en')}
-              disabled={state !== 'idle'}
-              style={{
-                padding: '4px 10px',
-                borderRadius: '6px',
-                border: 'none',
-                background: agentLanguage === 'en' ? 'rgba(99, 102, 241, 0.3)' : 'transparent',
-                color: agentLanguage === 'en' ? '#ffffff' : 'var(--text-secondary)',
-                fontWeight: agentLanguage === 'en' ? 600 : 500,
-                cursor: state === 'idle' ? 'pointer' : 'not-allowed',
-                fontSize: '0.78rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <span>🇺🇸</span>
-              <span>EN</span>
-            </button>
-          </div>
-
-          {/* Drawer Trigger */}
-          <button
-            onClick={() => setIsConfigOpen(!isConfigOpen)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              background: isConfigOpen ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255, 255, 255, 0.04)',
-              border: isConfigOpen ? '1px solid rgba(99, 102, 241, 0.4)' : '1px solid var(--border-subtle)',
-              color: isConfigOpen ? '#ffffff' : 'var(--text-secondary)',
-              padding: '6px 12px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '0.8rem',
-              fontWeight: 500,
-            }}
-          >
-            <span>⚙️</span>
-            <span>Agent Parameters</span>
-            <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>{isConfigOpen ? '▲' : '▼'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Expandable Studio Drawer */}
-      {isConfigOpen && (
-        <div
-          className="glass-panel"
-          style={{
-            padding: '20px',
-            animation: 'fadeIn 0.2s ease-in-out',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-          }}
-        >
-          {/* Drawer Tabs */}
-          <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '12px' }}>
-            <button
-              onClick={() => setConfigTab('prompt')}
-              style={{
-                padding: '6px 14px',
-                borderRadius: '6px',
-                border: 'none',
-                background: configTab === 'prompt' ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
-                color: configTab === 'prompt' ? '#fff' : 'var(--text-secondary)',
-                fontSize: '0.82rem',
-                fontWeight: configTab === 'prompt' ? 600 : 500,
-                cursor: 'pointer',
-              }}
-            >
-              Prompt & Initial Greeting
-            </button>
-            <button
-              onClick={() => setConfigTab('context')}
-              style={{
-                padding: '6px 14px',
-                borderRadius: '6px',
-                border: 'none',
-                background: configTab === 'context' ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
-                color: configTab === 'context' ? '#fff' : 'var(--text-secondary)',
-                fontSize: '0.82rem',
-                fontWeight: configTab === 'context' ? 600 : 500,
-                cursor: 'pointer',
-              }}
-            >
-              Target Contact & Scenario
-            </button>
-            <button
-              onClick={() => setConfigTab('guardrails')}
-              style={{
-                padding: '6px 14px',
-                borderRadius: '6px',
-                border: 'none',
-                background: configTab === 'guardrails' ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
-                color: configTab === 'guardrails' ? '#fff' : 'var(--text-secondary)',
-                fontSize: '0.82rem',
-                fontWeight: configTab === 'guardrails' ? 600 : 500,
-                cursor: 'pointer',
-              }}
-            >
-              Guardrails & Safety ({activeGuardrails.length})
-            </button>
-          </div>
-
-          {/* Drawer Content */}
-          {configTab === 'prompt' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  Opening Utterance / First Greeting:
-                </label>
-                <input
-                  type="text"
-                  value={customGreeting}
-                  onChange={(e) => setCustomGreeting(e.target.value)}
-                  disabled={state !== 'idle'}
-                  style={{
-                    width: '100%',
-                    background: 'rgba(0, 0, 0, 0.3)',
-                    border: '1px solid var(--border-medium)',
-                    borderRadius: '8px',
-                    color: '#fff',
-                    padding: '9px 14px',
-                    fontSize: '0.85rem',
-                    fontFamily: 'inherit',
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  System Instructions & Persona Guidance:
-                </label>
-                <textarea
-                  value={customInstructions}
-                  onChange={(e) => setCustomInstructions(e.target.value)}
-                  disabled={state !== 'idle'}
-                  rows={4}
-                  style={{
-                    width: '100%',
-                    background: 'rgba(0, 0, 0, 0.3)',
-                    border: '1px solid var(--border-medium)',
-                    borderRadius: '8px',
-                    color: '#fff',
-                    padding: '10px 14px',
-                    fontSize: '0.85rem',
-                    fontFamily: 'inherit',
-                    resize: 'vertical',
-                    lineHeight: '1.5',
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {configTab === 'context' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  Target Contact Name:
-                </label>
-                <input
-                  type="text"
-                  value={targetSubject}
-                  onChange={(e) => setTargetSubject(e.target.value)}
-                  disabled={state !== 'idle'}
-                  placeholder="e.g. Alex Johnson / 山田 太郎"
-                  style={{
-                    width: '100%',
-                    background: 'rgba(0, 0, 0, 0.3)',
-                    border: '1px solid var(--border-medium)',
-                    borderRadius: '8px',
-                    color: '#fff',
-                    padding: '9px 14px',
-                    fontSize: '0.85rem',
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  Scenario Parameters / Details:
-                </label>
-                <input
-                  type="text"
-                  value={targetContext}
-                  onChange={(e) => setTargetContext(e.target.value)}
-                  disabled={state !== 'idle'}
-                  placeholder="e.g. Balance: $350.00 • Creditor: Apex"
-                  style={{
-                    width: '100%',
-                    background: 'rgba(0, 0, 0, 0.3)',
-                    border: '1px solid var(--border-medium)',
-                    borderRadius: '8px',
-                    color: '#fff',
-                    padding: '9px 14px',
-                    fontSize: '0.85rem',
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {configTab === 'guardrails' && (
-            <div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginBottom: '10px' }}>
-                Regulated pipeline filters intercept unauthorized disclosures, PII leaks, and enforce civil communication.
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '10px' }}>
-                {activeGuardrails.map((rule, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '8px 12px',
-                      background: 'rgba(16, 185, 129, 0.08)',
-                      border: '1px solid rgba(16, 185, 129, 0.25)',
-                      borderRadius: '8px',
-                      fontSize: '0.8rem',
-                      color: '#a7f3d0',
-                    }}
-                  >
-                    <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
-                    <span>{rule}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Hero Call Command Console */}
-      <div
-        className="glass-panel"
-        style={{
-          padding: '20px 24px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '20px',
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Left side: Call action button & Live Status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
-          <button
-            onClick={handleToggle}
-            style={{
-              padding: '12px 28px',
-              borderRadius: '12px',
-              border: 'none',
-              fontWeight: 700,
-              fontSize: '0.95rem',
-              letterSpacing: '-0.01em',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              color: '#ffffff',
-              background:
-                state === 'streaming'
-                  ? 'var(--danger-gradient)'
-                  : state === 'connecting'
-                  ? 'linear-gradient(135deg, #d97706, #b45309)'
-                  : 'var(--primary-gradient)',
-              boxShadow:
-                state === 'streaming'
-                  ? '0 6px 24px rgba(244, 63, 94, 0.4)'
-                  : '0 6px 24px rgba(99, 102, 241, 0.35)',
-            }}
-          >
-            {state === 'streaming' ? (
-              <>
-                <span style={{ fontSize: '1rem' }}>🛑</span>
-                <span>End Call</span>
-              </>
-            ) : state === 'connecting' ? (
-              <>
-                <span style={{ fontSize: '1rem' }}>⏳</span>
-                <span>Connecting...</span>
-              </>
-            ) : (
-              <>
-                <span style={{ fontSize: '1rem' }}>📞</span>
-                <span>{currentPreset.actionText}</span>
-              </>
+    <div className="page" style={{ maxWidth: 1240 }}>
+      <PageHeader
+        eyebrow="Build · Live call"
+        title={currentPreset.title}
+        desc={`${targetSubject} — ${targetContext}`}
+        right={
+          <>
+            <Badge tone={statusTone} dot>
+              {state === 'streaming' ? `Live · ${formatDuration(callSeconds)}` : state === 'connecting' ? 'Connecting' : 'Standby'}
+            </Badge>
+            {lastCompletedSessionId && (
+              <button className="btn btn-sm" onClick={() => onInspectCall(lastCompletedSessionId)}>Inspect last call</button>
             )}
-          </button>
-
-          {/* Session Status Pill */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {state === 'streaming' ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} className="pulse-active" />
-                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#34d399', letterSpacing: '0.02em' }}>
-                    LIVE SESSION
-                  </span>
-                  <span className="mono-nums" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                    ({formatDuration(callSeconds)})
-                  </span>
-                </div>
-              ) : state === 'connecting' ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#fbbf24' }} />
-                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fbbf24' }}>
-                    CONNECTING PIPELINE...
-                  </span>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--text-dim)' }} />
-                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                    STANDBY
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-              {isAgentSpeaking ? (
-                <span style={{ color: '#818cf8', fontWeight: 500 }}>
-                  Agent is speaking • Barge-in armed (&lt;25ms cutoff)
-                </span>
-              ) : state === 'streaming' ? (
-                <span>Streaming mic audio at 16,000 Hz</span>
-              ) : (
-                <span>Click start to initiate real-time conversational agent</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Center: Live Soundwave Equalizer */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            height: '36px',
-            padding: '0 16px',
-            background: 'rgba(255, 255, 255, 0.03)',
-            borderRadius: '10px',
-            border: '1px solid var(--border-subtle)',
-          }}
-        >
-          {Array.from({ length: 10 }).map((_, idx) => (
-            <div
-              key={idx}
-              className={`wave-bar ${state === 'streaming' && (isAgentSpeaking || Math.random() > 0.3) ? 'speaking' : ''}`}
-              style={{
-                height: state === 'streaming' ? '14px' : '4px',
-                opacity: state === 'streaming' ? 1 : 0.25,
-              }}
-            />
-          ))}
-        </div>
-
-        {/* Right side: Contact Context & Inspect link */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginLeft: 'auto' }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#fff' }}>
-              {targetSubject}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>
-              {targetContext}
-            </div>
-          </div>
-
-          {lastCompletedSessionId && (
-            <button
-              onClick={() => onInspectCall(lastCompletedSessionId)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                borderRadius: '8px',
-                border: '1px solid rgba(99, 102, 241, 0.35)',
-                background: 'rgba(99, 102, 241, 0.15)',
-                color: '#a5b4fc',
-                fontWeight: 600,
-                fontSize: '0.8rem',
-                cursor: 'pointer',
-              }}
-            >
-              <span>Inspect Call Telemetry</span>
-              <span>→</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Latency & Telemetry Ribbon */}
-      <LatencyHUD
-        queueDepth={hudData.queueDepth}
-        gpuUtil={hudData.gpuUtil}
-        rtf={hudData.rtf}
-        mode="agent"
-        lastCaptureToFinalMs={asrCommitMs}
-        agentTurnLatencyMs={agentTurnLatencyMs}
-        ttsFirstAudioMs={ttsFirstAudioMs}
-        totalRoundTripMs={totalRoundTripMs}
-        agentVerified={identityVerified}
-        promiseCaptured={promiseCaptured}
+          </>
+        }
       />
 
-      {/* Error Banner */}
-      {error && (
-        <div
-          style={{
-            padding: '12px 18px',
-            background: 'rgba(244, 63, 94, 0.12)',
-            border: '1px solid rgba(244, 63, 94, 0.3)',
-            borderRadius: '10px',
-            color: '#fda4af',
-            fontSize: '0.85rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-          }}
-        >
-          <span>⚠️</span>
-          <span>{error}</span>
+      <div className="card card-pad" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {(Object.keys(DOMAIN_PRESETS[agentLanguage]) as DomainType[]).map((d) => (
+            <button
+              key={d}
+              onClick={() => handleSelectDomain(d)}
+              disabled={state !== 'idle'}
+              className={activeDomain === d ? '' : 'btn btn-sm'}
+              style={activeDomain === d
+                ? { padding: '5px 12px', borderRadius: 8, border: '1px solid #101828', background: '#101828', color: '#fff', fontSize: 12.5, fontWeight: 650, cursor: state === 'idle' ? 'pointer' : 'not-allowed' }
+                : undefined}
+            >
+              {DOMAIN_PRESETS[agentLanguage][d].title}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', alignItems: 'center' }}>
+          <div style={{ display: 'inline-flex', border: '1px solid var(--border-strong)', borderRadius: 8, padding: 2 }}>
+            {(['ja', 'en'] as AgentLanguage[]).map((l) => (
+              <button
+                key={l}
+                onClick={() => handleSelectLanguage(l)}
+                disabled={state !== 'idle'}
+                style={{
+                  padding: '4px 10px', borderRadius: 6, border: 'none', fontSize: 12.5, fontWeight: 650,
+                  background: agentLanguage === l ? '#101828' : 'transparent',
+                  color: agentLanguage === l ? '#fff' : 'var(--text-secondary)',
+                  cursor: state === 'idle' ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {l.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          <button className="btn btn-sm" onClick={() => setShowSettings((s) => !s)}>
+            {showSettings ? 'Hide settings' : 'Agent settings'}
+          </button>
+          <button
+            className={state === 'streaming' ? 'btn btn-danger' : 'btn btn-primary'}
+            onClick={handleToggle}
+          >
+            {state === 'streaming' ? 'End call' : state === 'connecting' ? 'Connecting…' : currentPreset.actionText}
+          </button>
+        </div>
+      </div>
+
+      {showSettings && (
+        <div className="card card-pad" style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 650, color: 'var(--text-secondary)' }}>Opening greeting</label>
+            <input className="input" value={customGreeting} onChange={(e) => setCustomGreeting(e.target.value)} disabled={state !== 'idle'} style={{ width: '100%', marginTop: 4, boxSizing: 'border-box' }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 650, color: 'var(--text-secondary)' }}>Contact</label>
+              <input className="input" value={targetSubject} onChange={(e) => setTargetSubject(e.target.value)} disabled={state !== 'idle'} style={{ width: '100%', marginTop: 4, boxSizing: 'border-box' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 650, color: 'var(--text-secondary)' }}>Scenario</label>
+              <input className="input" value={targetContext} onChange={(e) => setTargetContext(e.target.value)} disabled={state !== 'idle'} style={{ width: '100%', marginTop: 4, boxSizing: 'border-box' }} />
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 650, color: 'var(--text-secondary)' }}>System instructions</label>
+            <textarea className="input" value={customInstructions} onChange={(e) => setCustomInstructions(e.target.value)} disabled={state !== 'idle'} rows={3} style={{ width: '100%', marginTop: 4, boxSizing: 'border-box', resize: 'vertical' }} />
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {activeGuardrails.map((g) => <Badge key={g} tone="success">{g}</Badge>)}
+          </div>
         </div>
       )}
 
-      {/* Two Column Grid: Left Live Stream vs Right State Machine & Event Audit */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.65fr) minmax(340px, 1fr)', gap: '20px', alignItems: 'start' }}>
-        
-        {/* Left Column: Live Audio & Teleprompter Feed */}
-        <div
-          className="glass-panel"
-          style={{
-            minHeight: '480px',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-          }}
-        >
-          {/* Teleprompter Header */}
-          <div
-            style={{
-              padding: '14px 20px',
-              borderBottom: '1px solid var(--border-subtle)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              background: 'rgba(255, 255, 255, 0.02)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#fff' }}>
-                Conversation Teleprompter
-              </span>
-              <span
-                style={{
-                  fontSize: '0.7rem',
-                  padding: '2px 8px',
-                  borderRadius: '9999px',
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid var(--border-subtle)',
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                {entries.length} {entries.length === 1 ? 'Turn' : 'Turns'}
-              </span>
-            </div>
+      <div style={{ marginBottom: 12 }}>
+        <LatencyHUD
+          queueDepth={hudData.queueDepth} gpuUtil={hudData.gpuUtil} rtf={hudData.rtf} mode="agent"
+          lastCaptureToFinalMs={asrCommitMs} agentTurnLatencyMs={agentTurnLatencyMs}
+          ttsFirstAudioMs={ttsFirstAudioMs} totalRoundTripMs={totalRoundTripMs}
+          agentVerified={identityVerified} promiseCaptured={promiseCaptured}
+        />
+      </div>
 
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-              Domain: {currentPreset.title}
+      {error && (
+        <div className="card card-pad" style={{ borderColor: 'var(--danger-border)', background: 'var(--danger-soft)', color: 'var(--danger)', marginBottom: 12, fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(300px, 1fr)', gap: 12, alignItems: 'start' }}>
+        <div className="card" style={{ padding: 0 }}>
+          <div className="card-header">
+            <h3 className="card-title">Transcript</h3>
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+              {entries.length} turn{entries.length === 1 ? '' : 's'}{isAgentSpeaking ? ' · agent speaking' : ''}
             </span>
           </div>
-
-          {/* Teleprompter Body */}
-          <div
-            ref={chatScrollRef}
-            style={{
-              padding: '16px 20px',
-              flex: 1,
-              maxHeight: '520px',
-              overflowY: 'auto',
-            }}
-          >
+          <div ref={chatScrollRef} style={{ padding: 16, maxHeight: 560, overflowY: 'auto' }}>
             {entries.length === 0 ? (
-              <div
-                style={{
-                  padding: '56px 24px',
-                  textAlign: 'center',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '16px',
-                }}
-              >
-                <div
-                  style={{
-                    width: '56px',
-                    height: '56px',
-                    borderRadius: '16px',
-                    background: 'rgba(99, 102, 241, 0.1)',
-                    border: '1px solid rgba(99, 102, 241, 0.25)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.6rem',
-                  }}
-                >
-                  🎙️
-                </div>
-
-                <div>
-                  <div style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>
-                    Ready to Start Voice Conversation
-                  </div>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-tertiary)', maxWidth: '420px', lineHeight: '1.5' }}>
-                    Press <strong>{currentPreset.actionText}</strong> and speak through your microphone in {agentLanguage === 'ja' ? 'Japanese' : 'English'}.
-                  </div>
-                </div>
-
-                {/* Quick prompt hints */}
-                <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', maxWidth: '440px' }}>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-tertiary)' }}>
-                    Sample Utterances to Test:
-                  </span>
-                  {activeDomain === 'collections' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div style={{ padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'left' }}>
-                        💬 {agentLanguage === 'ja' ? '「山田太郎です。生年月日は1988年4月15日です。」' : '"Yes, this is Alex. My date of birth is April 15, 1988."'}
-                      </div>
-                      <div style={{ padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'left' }}>
-                        💬 {agentLanguage === 'ja' ? '「今月は厳しいので、来月15日に2万円支払います。」' : '"I can pay $200 on the 15th of next month."'}
-                      </div>
-                    </div>
-                  )}
-                  {activeDomain === 'screening' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div style={{ padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'left' }}>
-                        💬 {agentLanguage === 'ja' ? '「Reactと分散システムの開発経験が6年あります。」' : '"I have 6 years of experience building distributed systems in React and TypeScript."'}
-                      </div>
-                    </div>
-                  )}
-                  {activeDomain === 'kyc' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div style={{ padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'left' }}>
-                        💬 {agentLanguage === 'ja' ? '「電話番号は090-1234-5678、暗証番号は4821です。」' : '"My registered phone is 555-0199 and security PIN is 4821."'}
-                      </div>
-                    </div>
-                  )}
-                  {activeDomain === 'custom' && (
-                    <div style={{ padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'left' }}>
-                      💬 {agentLanguage === 'ja' ? '「サービスの詳細とお見積りについて教えてください。」' : '"Tell me about your enterprise voice AI services."'}
-                    </div>
-                  )}
-                </div>
+              <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text-tertiary)' }}>
+                <div style={{ fontWeight: 650, color: 'var(--text)', marginBottom: 4 }}>Ready to start</div>
+                <div style={{ fontSize: 13 }}>Press “{currentPreset.actionText}” and speak. Try: “Yes, this is Alex — my date of birth is April 15, 1988.”</div>
               </div>
             ) : (
               <Captions entries={entries} />
@@ -1056,281 +432,40 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
           </div>
         </div>
 
-        {/* Right Column: Workflow State Machine & Compliance Audit Feed */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          
-          {/* Card 1: Workflow State Machine */}
-          <div className="glass-panel" style={{ padding: '18px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#fff' }}>
-                Workflow State Machine
-              </span>
-              <span
-                style={{
-                  fontSize: '0.68rem',
-                  fontWeight: 600,
-                  padding: '2px 8px',
-                  borderRadius: '6px',
-                  background: 'rgba(99, 102, 241, 0.15)',
-                  color: '#a5b4fc',
-                }}
-              >
-                {currentPreset.title}
-              </span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="card" style={{ padding: 0 }}>
+            <div className="card-header"><h3 className="card-title">Workflow state</h3><Badge tone="neutral">{currentPreset.title}</Badge></div>
+            <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {steps.map((s, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: s.state === 'done' ? 'var(--success-soft)' : s.state === 'active' ? 'var(--accent-soft)' : 'var(--surface-2)' }}>
+                  <span style={{ fontSize: 13, fontWeight: s.state === 'active' ? 650 : 450 }}>{i + 1}. {s.title}</span>
+                  <Badge tone={s.state === 'done' ? 'success' : s.state === 'active' ? 'info' : 'neutral'}>
+                    {s.state === 'done' ? 'Done' : s.state === 'active' ? 'Active' : 'Pending'}
+                  </Badge>
+                </div>
+              ))}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 2 }}>
+                <div className="stat"><div className="stat-label">Stop-contact</div><div style={{ fontWeight: 700, color: stopContact ? 'var(--danger)' : 'var(--success)' }}>{stopContact ? 'Triggered' : 'Clear'}</div></div>
+                <div className="stat"><div className="stat-label">Promise</div><div style={{ fontWeight: 700 }}>{promiseCaptured || 'None'}</div></div>
+              </div>
             </div>
-
-            {/* Collections Stepper */}
-            {activeDomain === 'collections' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {/* 4 Pipeline Stages */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {[
-                    { key: 'greet', title: '1. Greeting & Disclose Identity', isDone: callPhase !== 'greet', isCurrent: callPhase === 'greet' },
-                    { key: 'verify', title: '2. Debtor DOB Verification', isDone: identityVerified, isCurrent: callPhase === 'verify' },
-                    { key: 'disclose', title: '3. Debt Disclosure & Hardship', isDone: disclosureDone || callPhase === 'close', isCurrent: callPhase === 'disclose' },
-                    { key: 'close', title: '4. Promise to Pay / Escalation', isDone: Boolean(promiseCaptured), isCurrent: callPhase === 'close' },
-                  ].map((step, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '9px 12px',
-                        borderRadius: '8px',
-                        background: step.isDone
-                          ? 'rgba(16, 185, 129, 0.08)'
-                          : step.isCurrent
-                          ? 'rgba(99, 102, 241, 0.12)'
-                          : 'rgba(255, 255, 255, 0.02)',
-                        border: step.isDone
-                          ? '1px solid rgba(16, 185, 129, 0.25)'
-                          : step.isCurrent
-                          ? '1px solid rgba(99, 102, 241, 0.4)'
-                          : '1px solid var(--border-subtle)',
-                      }}
-                    >
-                      <span style={{ fontSize: '0.8rem', fontWeight: step.isCurrent ? 600 : 400, color: step.isDone ? '#a7f3d0' : step.isCurrent ? '#fff' : 'var(--text-secondary)' }}>
-                        {step.title}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: '0.68rem',
-                          fontWeight: 600,
-                          padding: '1px 6px',
-                          borderRadius: '4px',
-                          background: step.isDone ? 'rgba(16, 185, 129, 0.2)' : step.isCurrent ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                          color: step.isDone ? '#34d399' : step.isCurrent ? '#a5b4fc' : 'var(--text-tertiary)',
-                        }}
-                      >
-                        {step.isDone ? '✓ DONE' : step.isCurrent ? 'ACTIVE' : 'PENDING'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Sub-metrics */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginTop: '6px' }}>
-                  <div style={{ padding: '8px 10px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)' }}>Stop Contact</div>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: stopContact ? 'var(--accent-rose)' : 'var(--accent-emerald)' }}>
-                      {stopContact ? 'TRIGGERED' : 'CLEAR'}
-                    </div>
-                  </div>
-                  <div style={{ padding: '8px 10px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)' }}>Promise Captured</div>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: promiseCaptured ? '#60a5fa' : 'var(--text-dim)' }}>
-                      {promiseCaptured || 'None'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Screening Stepper */}
-            {activeDomain === 'screening' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {[
-                  { title: '1. Candidate Greeting & Context', isDone: screeningStage !== 'intro', isCurrent: screeningStage === 'intro' },
-                  { title: '2. Stack & Architecture Interview', isDone: screeningStage === 'expectations' || screeningStage === 'qualified', isCurrent: screeningStage === 'experience' },
-                  { title: '3. Compensation & Mode Verification', isDone: screeningStage === 'qualified', isCurrent: screeningStage === 'expectations' },
-                  { title: '4. First-Round Qualification Verdict', isDone: screeningQualified, isCurrent: screeningStage === 'qualified' },
-                ].map((step, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '9px 12px',
-                      borderRadius: '8px',
-                      background: step.isDone
-                        ? 'rgba(16, 185, 129, 0.08)'
-                        : step.isCurrent
-                        ? 'rgba(99, 102, 241, 0.12)'
-                        : 'rgba(255, 255, 255, 0.02)',
-                      border: step.isDone
-                        ? '1px solid rgba(16, 185, 129, 0.25)'
-                        : step.isCurrent
-                        ? '1px solid rgba(99, 102, 241, 0.4)'
-                        : '1px solid var(--border-subtle)',
-                    }}
-                  >
-                    <span style={{ fontSize: '0.8rem', color: step.isDone ? '#a7f3d0' : step.isCurrent ? '#fff' : 'var(--text-secondary)' }}>
-                      {step.title}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: '0.68rem',
-                        fontWeight: 600,
-                        padding: '1px 6px',
-                        borderRadius: '4px',
-                        background: step.isDone ? 'rgba(16, 185, 129, 0.2)' : step.isCurrent ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                        color: step.isDone ? '#34d399' : step.isCurrent ? '#a5b4fc' : 'var(--text-tertiary)',
-                      }}
-                    >
-                      {step.isDone ? '✓ DONE' : step.isCurrent ? 'ACTIVE' : 'PENDING'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* KYC Stepper */}
-            {activeDomain === 'kyc' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {[
-                  { title: '1. Customer Inbound Greeting', isDone: true, isCurrent: !identityVerified },
-                  { title: '2. 4-Digit Security PIN Verification', isDone: identityVerified, isCurrent: !identityVerified },
-                  { title: '3. Authenticated Account Inquiry', isDone: kycResolved, isCurrent: identityVerified && !kycResolved },
-                  { title: '4. Case Resolution & Wrap-up', isDone: kycResolved, isCurrent: kycResolved },
-                ].map((step, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '9px 12px',
-                      borderRadius: '8px',
-                      background: step.isDone
-                        ? 'rgba(16, 185, 129, 0.08)'
-                        : step.isCurrent
-                        ? 'rgba(99, 102, 241, 0.12)'
-                        : 'rgba(255, 255, 255, 0.02)',
-                      border: step.isDone
-                        ? '1px solid rgba(16, 185, 129, 0.25)'
-                        : step.isCurrent
-                        ? '1px solid rgba(99, 102, 241, 0.4)'
-                        : '1px solid var(--border-subtle)',
-                    }}
-                  >
-                    <span style={{ fontSize: '0.8rem', color: step.isDone ? '#a7f3d0' : step.isCurrent ? '#fff' : 'var(--text-secondary)' }}>
-                      {step.title}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: '0.68rem',
-                        fontWeight: 600,
-                        padding: '1px 6px',
-                        borderRadius: '4px',
-                        background: step.isDone ? 'rgba(16, 185, 129, 0.2)' : step.isCurrent ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                        color: step.isDone ? '#34d399' : step.isCurrent ? '#a5b4fc' : 'var(--text-tertiary)',
-                      }}
-                    >
-                      {step.isDone ? '✓ AUTH' : step.isCurrent ? 'ACTIVE' : 'PENDING'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Custom Stepper */}
-            {activeDomain === 'custom' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-                <div style={{ padding: '10px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Mode</div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#a5b4fc' }}>Custom Enterprise Agent</div>
-                </div>
-                <div style={{ padding: '10px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Active Rules</div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-emerald)' }}>{activeGuardrails.length} Enforced</div>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Card 2: Streaming Compliance & Safety Audit Feed */}
-          <div
-            className="glass-panel"
-            style={{
-              padding: '18px 20px',
-              maxHeight: '300px',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#fff' }}>
-                  Safety & Intercept Audit
-                </span>
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} />
-              </div>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Real-time</span>
-            </div>
-
-            <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div className="card" style={{ padding: 0 }}>
+            <div className="card-header"><h3 className="card-title">Safety feed</h3><Badge tone="neutral">Realtime</Badge></div>
+            <div style={{ padding: 14, maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
               {eventsFeed.length === 0 ? (
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontStyle: 'italic', padding: '16px 0', textAlign: 'center' }}>
-                  No intercept events yet. Guardrails armed.
-                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-tertiary)', textAlign: 'center', padding: '12px 0' }}>No events yet. Guardrails armed.</div>
               ) : (
-                eventsFeed.map((ev, index) => {
-                  let badgeBg = 'rgba(255, 255, 255, 0.04)';
-                  let badgeColor = 'var(--text-secondary)';
-                  let borderColor = 'var(--border-subtle)';
-
-                  if (ev.type === 'compliance_block') {
-                    badgeBg = 'rgba(244, 63, 94, 0.12)';
-                    badgeColor = 'var(--accent-rose)';
-                    borderColor = 'rgba(244, 63, 94, 0.3)';
-                  } else if (ev.type === 'identity_verified' || ev.type === 'candidate_qualified' || ev.type === 'promise_to_pay') {
-                    badgeBg = 'rgba(16, 185, 129, 0.12)';
-                    badgeColor = 'var(--accent-emerald)';
-                    borderColor = 'rgba(16, 185, 129, 0.3)';
-                  } else if (ev.type === 'interrupt') {
-                    badgeBg = 'rgba(245, 158, 11, 0.12)';
-                    badgeColor = 'var(--accent-amber)';
-                    borderColor = 'rgba(245, 158, 11, 0.3)';
-                  } else if (ev.type === 'escalate' || ev.type === 'stop_contact') {
-                    badgeBg = 'rgba(168, 85, 247, 0.12)';
-                    badgeColor = 'var(--accent-purple)';
-                    borderColor = 'rgba(168, 85, 247, 0.3)';
-                  }
-
-                  return (
-                    <div
-                      key={index}
-                      style={{
-                        padding: '8px 12px',
-                        background: badgeBg,
-                        border: `1px solid ${borderColor}`,
-                        borderRadius: '8px',
-                        fontSize: '0.78rem',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
-                        <span style={{ fontWeight: 700, color: badgeColor, textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: '0.04em' }}>
-                          {ev.type}
-                        </span>
-                        <span className="mono-nums" style={{ color: 'var(--text-tertiary)', fontSize: '0.65rem' }}>{ev.time}</span>
-                      </div>
-                      <div style={{ color: 'var(--text-primary)', lineHeight: '1.4' }}>{ev.text}</div>
+                eventsFeed.map((ev, i) => (
+                  <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', fontSize: 13 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                      <Badge tone={ev.type === 'compliance_block' ? 'danger' : ev.type === 'interrupt' ? 'warning' : 'success'}>{ev.type}</Badge>
+                      <span className="mono" style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{ev.time}</span>
                     </div>
-                  );
-                })
+                    <div style={{ color: 'var(--text-secondary)' }}>{ev.rule ? `[${ev.rule}] ` : ''}{ev.text}</div>
+                  </div>
+                ))
               )}
             </div>
           </div>
@@ -1339,4 +474,3 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
     </div>
   );
 };
-

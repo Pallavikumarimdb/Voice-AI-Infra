@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Navbar, ActiveTab } from './ui/Navbar.tsx';
+import { Navbar, Topbar, ActiveTab } from './ui/Navbar.tsx';
 import { LiveCallPanel } from './ui/LiveCallPanel.tsx';
 import { CallList } from './ui/CallList.tsx';
 import { CallInspector } from './ui/CallInspector.tsx';
@@ -97,16 +97,18 @@ export const App: React.FC = () => {
   }, [selectedCallId]);
 
   return (
-    <div style={{ minHeight: '100vh', background: 'transparent', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column' }}>
-      {/* Top Navigation */}
+    <div className="shell">
+      {/* Sidebar */}
       <Navbar
         activeTab={activeTab}
         onSelectTab={(tab) => navigateTo(tab, null)}
         isSampleData={isSampleData}
       />
 
-      {/* Main View Router */}
-      <main style={{ flex: 1 }}>
+      <div className="main-col">
+        <Topbar activeTab={activeTab} isSampleData={isSampleData} onHome={() => navigateTo('live', null)} onSelectTab={(tab) => navigateTo(tab, null)} />
+        {/* Main View Router */}
+        <main style={{ flex: 1, minWidth: 0 }}>
         {activeTab === 'live' && (
           <LiveCallPanel onInspectCall={(id) => navigateTo('calls', id)} />
         )}
@@ -121,24 +123,21 @@ export const App: React.FC = () => {
 
         {activeTab === 'calls' && selectedCallId && (
           loadingDetail ? (
-            <div style={{ padding: '64px', textAlign: 'center', color: '#8b949e' }}>
-              Loading call record {selectedCallId}...
-            </div>
+            <div className="page"><div className="card card-pad" style={{ textAlign: 'center', color: 'var(--text-tertiary)' }}>
+              Loading call record…
+            </div></div>
           ) : activeCallDetail ? (
             <CallInspector
               call={activeCallDetail}
               onBack={() => navigateTo('calls', null)}
             />
           ) : (
-            <div style={{ padding: '64px', textAlign: 'center', color: '#8b949e' }}>
+            <div className="page"><div className="card card-pad" style={{ textAlign: 'center' }}>
               <div>Call record not found.</div>
-              <button
-                onClick={() => navigateTo('calls', null)}
-                style={{ marginTop: '12px', padding: '6px 14px', background: '#21262d', color: '#58a6ff', border: '1px solid #30363d', borderRadius: '4px', cursor: 'pointer' }}
-              >
-                ← Back to List
+              <button className="btn" style={{ marginTop: 12 }} onClick={() => navigateTo('calls', null)}>
+                Back to list
               </button>
-            </div>
+            </div></div>
           )
         )}
 
@@ -158,7 +157,8 @@ export const App: React.FC = () => {
         {activeTab === 'translate' && (
           <TranslatePanel />
         )}
-      </main>
+        </main>
+      </div>
     </div>
   );
 };

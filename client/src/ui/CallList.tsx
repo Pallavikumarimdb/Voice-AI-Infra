@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { CallSummaryItem } from '../data/types.ts';
 import { SourceBadge, ComplianceBadge, HardFailBadge } from './Badges.tsx';
+import { PageHeader, EmptyState, Badge } from './primitives.tsx';
 
 interface CallListProps {
   calls: CallSummaryItem[];
@@ -8,17 +9,23 @@ interface CallListProps {
   loading?: boolean;
 }
 
+function shortId(id: string) {
+  if (id.length <= 24) return id;
+  return `${id.slice(0, 8)}…${id.slice(-6)}`;
+}
+
 export const CallList: React.FC<CallListProps> = ({ calls, onSelectCall, loading = false }) => {
   const [search, setSearch] = useState('');
   const [filterSource, setFilterSource] = useState('all');
   const [filterVariant, setFilterVariant] = useState('all');
-  const [filterPersona, setFilterPersona] = useState('all');
   const [filterHardFail, setFilterHardFail] = useState('all');
   const [filterBlocked, setFilterBlocked] = useState('all');
-  const [filterEscalated, setFilterEscalated] = useState('all');
 
   const [page, setPage] = useState(1);
-  const pageSize = 15;
+  const pageSize = 20;
+
+  const personas = useMemo(() => Array.from(new Set(calls.map((c) => c.persona))).sort(), [calls]);
+  const [filterPersona, setFilterPersona] = useState('all');
 
   const filteredCalls = useMemo(() => {
     return calls.filter((c) => {
@@ -32,280 +39,134 @@ export const CallList: React.FC<CallListProps> = ({ calls, onSelectCall, loading
       if (filterHardFail === 'failed' && c.hardFailPassed) return false;
       if (filterBlocked === 'blocked' && !c.hasComplianceBlock) return false;
       if (filterBlocked === 'none' && c.hasComplianceBlock) return false;
-      if (filterEscalated === 'yes' && !c.hasEscalation) return false;
       return true;
     });
-  }, [calls, search, filterSource, filterVariant, filterPersona, filterHardFail, filterBlocked, filterEscalated]);
+  }, [calls, search, filterSource, filterVariant, filterPersona, filterHardFail, filterBlocked]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCalls.length / pageSize));
   const paginatedCalls = useMemo(() => {
     const start = (page - 1) * pageSize;
     return filteredCalls.slice(start, start + pageSize);
-  }, [filteredCalls, page, pageSize]);
+  }, [filteredCalls, page]);
+
+  const fails = calls.filter((c) => !c.hardFailPassed).length;
+  const blocked = calls.filter((c) => c.hasComplianceBlock).length;
+
+  const selectStyle: React.CSSProperties = { maxWidth: 170 };
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-        <div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 600, color: '#f0f6fc', margin: 0 }}>
-            Call Inspector: Browse & Review Calls
-          </h2>
-          <p style={{ color: '#8b949e', margin: '4px 0 0 0', fontSize: '0.85rem' }}>
-            Inspect turn-by-turn agent reasoning, guard diffs, latency breakdown, and SHA-256 hash chains.
-          </p>
-        </div>
-        <div style={{ fontSize: '0.85rem', color: '#8b949e', textAlign: 'right' }}>
-          Showing <strong>{filteredCalls.length}</strong> of <strong>{calls.length}</strong> total calls
-        </div>
-      </div>
+    <div className="page">
+      <PageHeader
+        eyebrow="Review · Inspector"
+        title="Calls"
+        desc="Turn-level audit trail for every live and simulated call — guard diffs, latency, and hash-chain integrity."
+        right={
+          <>
+            <Badge tone="neutral">{filteredCalls.length} of {calls.length}</Badge>
+            {fails > 0 && <Badge tone="danger">{fails} hard-fails</Badge>}
+            {blocked > 0 && <Badge tone="warning">{blocked} guard hits</Badge>}
+          </>
+        }
+      />
 
-      {/* Filter Bar */}
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '12px',
-          padding: '14px 16px',
-          background: '#161b22',
-          borderRadius: '8px',
-          border: '1px solid #30363d',
-          marginBottom: '20px',
-          alignItems: 'center',
-        }}
-      >
+      <div className="toolbar">
         <input
+          className="input"
           type="text"
-          placeholder="Search by Call ID or Persona..."
+          placeholder="Search call ID or persona…"
           value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          style={{
-            flex: '1 1 200px',
-            background: '#0d1117',
-            color: '#c9d1d9',
-            border: '1px solid #30363d',
-            borderRadius: '6px',
-            padding: '6px 12px',
-            fontSize: '0.85rem',
-          }}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          style={{ flex: '1 1 220px', minWidth: 200 }}
         />
-
-        <select
-          value={filterSource}
-          onChange={(e) => {
-            setFilterSource(e.target.value);
-            setPage(1);
-          }}
-          style={{ background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: '6px', padding: '6px 10px', fontSize: '0.85rem' }}
-        >
-          <option value="all">Source: All</option>
+        <select className="select" style={selectStyle} value={filterSource} onChange={(e) => { setFilterSource(e.target.value); setPage(1); }}>
+          <option value="all">All sources</option>
           <option value="sim">Simulated</option>
-          <option value="live">Live Calls</option>
+          <option value="live">Live</option>
         </select>
-
-        <select
-          value={filterVariant}
-          onChange={(e) => {
-            setFilterVariant(e.target.value);
-            setPage(1);
-          }}
-          style={{ background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: '6px', padding: '6px 10px', fontSize: '0.85rem' }}
-        >
-          <option value="all">Variant: All</option>
-          <option value="v2_graph">v2_graph (LangGraph)</option>
+        <select className="select" style={selectStyle} value={filterVariant} onChange={(e) => { setFilterVariant(e.target.value); setPage(1); }}>
+          <option value="all">All variants</option>
+          <option value="v2_graph">v2_graph</option>
           <option value="v1_baseline">v1_baseline</option>
           <option value="v1_no_guard">v1_no_guard</option>
           <option value="v2_graph_no_slow_path">v2_no_slow_path</option>
         </select>
-
-        <select
-          value={filterHardFail}
-          onChange={(e) => {
-            setFilterHardFail(e.target.value);
-            setPage(1);
-          }}
-          style={{ background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: '6px', padding: '6px 10px', fontSize: '0.85rem' }}
-        >
-          <option value="all">Hard-Fail: All</option>
-          <option value="passed">Passed (0 Violations)</option>
-          <option value="failed">Failed (Violations Hit)</option>
+        <select className="select" style={selectStyle} value={filterPersona} onChange={(e) => { setFilterPersona(e.target.value); setPage(1); }}>
+          <option value="all">All personas</option>
+          {personas.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
-
-        <select
-          value={filterPersona}
-          onChange={(e) => {
-            setFilterPersona(e.target.value);
-            setPage(1);
-          }}
-          style={{ background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: '6px', padding: '6px 10px', fontSize: '0.85rem' }}
-        >
-          <option value="all">Persona: All</option>
-          <option value="cooperative">Cooperative</option>
-          <option value="hostile">Hostile</option>
-          <option value="evasive">Evasive</option>
-          <option value="hardship">Hardship</option>
-          <option value="already_paid">Already Paid</option>
-          <option value="third_party">Third Party</option>
-          <option value="stop_contact">Stop Contact</option>
-          <option value="off_script">Off Script</option>
-          <option value="interrupting">Interrupting</option>
-          <option value="fails_verification">Fails Verification</option>
+        <select className="select" style={selectStyle} value={filterHardFail} onChange={(e) => { setFilterHardFail(e.target.value); setPage(1); }}>
+          <option value="all">Hard-fail: all</option>
+          <option value="passed">Passed</option>
+          <option value="failed">Failed</option>
         </select>
-
-        <select
-          value={filterBlocked}
-          onChange={(e) => {
-            setFilterBlocked(e.target.value);
-            setPage(1);
-          }}
-          style={{ background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: '6px', padding: '6px 10px', fontSize: '0.85rem' }}
-        >
-          <option value="all">Guard Interception: All</option>
-          <option value="blocked">Guard Intercepted</option>
-          <option value="none">No Interception</option>
-        </select>
-
-        <select
-          value={filterEscalated}
-          onChange={(e) => {
-            setFilterEscalated(e.target.value);
-            setPage(1);
-          }}
-          style={{ background: '#0d1117', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: '6px', padding: '6px 10px', fontSize: '0.85rem' }}
-        >
-          <option value="all">Escalation: All</option>
-          <option value="yes">Escalated</option>
-          <option value="no">Not Escalated</option>
+        <select className="select" style={selectStyle} value={filterBlocked} onChange={(e) => { setFilterBlocked(e.target.value); setPage(1); }}>
+          <option value="all">Guard: all</option>
+          <option value="blocked">Intercepted</option>
+          <option value="none">Clean</option>
         </select>
       </div>
 
-      {/* Calls Table */}
       {loading ? (
-        <div style={{ padding: '48px', textAlign: 'center', color: '#8b949e' }}>Loading calls...</div>
+        <div className="card card-pad" style={{ textAlign: 'center', color: 'var(--text-tertiary)' }}>Loading calls…</div>
       ) : paginatedCalls.length === 0 ? (
-        <div style={{ padding: '48px', textAlign: 'center', color: '#8b949e', background: '#161b22', borderRadius: '8px' }}>
-          No calls match the selected filters.
-        </div>
+        <EmptyState title="No calls match these filters" desc="Clear search or widen the variant / persona filters." />
       ) : (
-        <div style={{ overflowX: 'auto', background: '#0d1117', border: '1px solid #30363d', borderRadius: '8px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-            <thead>
-              <tr style={{ background: '#161b22', borderBottom: '1px solid #30363d', color: '#8b949e' }}>
-                <th style={{ padding: '12px 16px' }}>Call Session ID</th>
-                <th style={{ padding: '12px 16px' }}>Source / Variant</th>
-                <th style={{ padding: '12px 16px' }}>Persona</th>
-                <th style={{ padding: '12px 16px' }}>Outcome</th>
-                <th style={{ padding: '12px 16px' }}>Compliance Status</th>
-                <th style={{ padding: '12px 16px' }}>Hard-Fail Status</th>
-                <th style={{ padding: '12px 16px' }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedCalls.map((call) => (
-                <tr
-                  key={call.id}
-                  style={{
-                    borderBottom: '1px solid #21262d',
-                    background: !call.hardFailPassed
-                      ? 'rgba(248, 81, 73, 0.04)'
-                      : call.hasComplianceBlock
-                      ? 'rgba(210, 153, 34, 0.04)'
-                      : 'transparent',
-                  }}
-                >
-                  <td style={{ padding: '12px 16px', fontFamily: 'monospace', color: '#f0f6fc' }}>
-                    <div style={{ fontWeight: 600 }}>{call.id.length > 32 ? call.id.substring(0, 32) + '...' : call.id}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#8b949e' }}>
-                      {new Date(call.timestamp).toLocaleTimeString()} • {call.totalTurns} turns
-                    </div>
-                  </td>
-
-                  <td style={{ padding: '12px 16px' }}>
-                    <SourceBadge source={call.source} />
-                    <span style={{ color: '#8b949e', marginLeft: '6px' }}>{call.variant}</span>
-                  </td>
-
-                  <td style={{ padding: '12px 16px', color: '#e6edf3', fontWeight: 500 }}>
-                    {call.persona}
-                  </td>
-
-                  <td style={{ padding: '12px 16px' }}>
-                    {call.promiseSecured ? (
-                      <span style={{ color: '#3fb950', fontWeight: 600 }}>★ Promise Secured</span>
-                    ) : (
-                      <span style={{ color: '#8b949e' }}>{call.outcome}</span>
-                    )}
-                  </td>
-
-                  <td style={{ padding: '12px 16px' }}>
-                    <ComplianceBadge blocked={call.hasComplianceBlock} />
-                  </td>
-
-                  <td style={{ padding: '12px 16px' }}>
-                    <HardFailBadge passed={call.hardFailPassed} />
-                  </td>
-
-                  <td style={{ padding: '12px 16px' }}>
-                    <button
-                      onClick={() => onSelectCall(call.id)}
-                      style={{
-                        padding: '4px 12px',
-                        background: '#21262d',
-                        color: '#58a6ff',
-                        border: '1px solid #30363d',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontWeight: 500,
-                        fontSize: '0.8rem',
-                      }}
-                    >
-                      Inspect →
-                    </button>
-                  </td>
+        <>
+          <div className="table-wrap">
+            <table className="grid">
+              <thead>
+                <tr>
+                  <th>Call</th>
+                  <th>Source</th>
+                  <th>Variant</th>
+                  <th>Persona</th>
+                  <th>Outcome</th>
+                  <th>Guard</th>
+                  <th>Hard-fail</th>
+                  <th style={{ textAlign: 'right' }}>Turns</th>
+                  <th />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {paginatedCalls.map((call) => {
+                  const rowClass = !call.hardFailPassed ? 'row-danger' : call.hasComplianceBlock ? 'row-warn' : '';
+                  return (
+                    <tr key={call.id} className={rowClass} onClick={() => onSelectCall(call.id)} style={{ cursor: 'pointer' }}>
+                      <td>
+                        <div className="mono" title={call.id} style={{ fontWeight: 600 }}>{shortId(call.id)}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                          {new Date(call.timestamp).toLocaleString()}
+                        </div>
+                      </td>
+                      <td><SourceBadge source={call.source} /></td>
+                      <td className="mono">{call.variant}</td>
+                      <td style={{ fontWeight: 550 }}>{call.persona}</td>
+                      <td style={{ color: call.promiseSecured ? 'var(--success)' : 'var(--text-secondary)', fontWeight: call.promiseSecured ? 650 : 400 }}>
+                        {call.promiseSecured ? 'Promise secured' : call.outcome}
+                      </td>
+                      <td><ComplianceBadge blocked={call.hasComplianceBlock} /></td>
+                      <td><HardFailBadge passed={call.hardFailPassed} /></td>
+                      <td className="mono" style={{ textAlign: 'right' }}>{call.totalTurns}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); onSelectCall(call.id); }}>
+                          Open
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-      {/* Pagination Bar */}
-      {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '20px' }}>
-          <button
-            disabled={page === 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            style={{
-              padding: '6px 14px',
-              background: page === 1 ? '#161b22' : '#21262d',
-              color: page === 1 ? '#484f58' : '#c9d1d9',
-              border: '1px solid #30363d',
-              borderRadius: '4px',
-              cursor: page === 1 ? 'not-allowed' : 'pointer',
-            }}
-          >
-            ← Previous
-          </button>
-          <span style={{ fontSize: '0.85rem', color: '#8b949e', margin: '0 8px' }}>
-            Page {page} of {totalPages}
-          </span>
-          <button
-            disabled={page === totalPages}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            style={{
-              padding: '6px 14px',
-              background: page === totalPages ? '#161b22' : '#21262d',
-              color: page === totalPages ? '#484f58' : '#c9d1d9',
-              border: '1px solid #30363d',
-              borderRadius: '4px',
-              cursor: page === totalPages ? 'not-allowed' : 'pointer',
-            }}
-          >
-            Next →
-          </button>
-        </div>
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 12 }}>
+              <span style={{ fontSize: 12.5, color: 'var(--text-tertiary)' }}>Page {page} of {totalPages}</span>
+              <button className="btn btn-sm" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Previous</button>
+              <button className="btn btn-sm" disabled={page === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

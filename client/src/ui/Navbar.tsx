@@ -1,4 +1,5 @@
 import React from 'react';
+import { Icons } from './primitives.tsx';
 
 export type ActiveTab = 'live' | 'calls' | 'results' | 'label' | 'translate';
 
@@ -8,200 +9,130 @@ interface NavbarProps {
   isSampleData: boolean;
 }
 
+const GROUPS: { section: string; items: { id: ActiveTab; label: string; desc: string }[] }[] = [
+  {
+    section: 'Build',
+    items: [
+      { id: 'live', label: 'Live call', desc: 'Run & monitor' },
+      { id: 'translate', label: 'Translate', desc: 'Realtime demo' },
+    ],
+  },
+  {
+    section: 'Review',
+    items: [
+      { id: 'calls', label: 'Calls', desc: 'Inspector' },
+      { id: 'label', label: 'Labeling', desc: 'Human ratings' },
+    ],
+  },
+  {
+    section: 'Measure',
+    items: [{ id: 'results', label: 'Results', desc: 'Eval suite' }],
+  },
+];
+
+const TITLES: Record<ActiveTab, { crumb: string; title: string }> = {
+  live: { crumb: 'Build', title: 'Live call' },
+  translate: { crumb: 'Build', title: 'Translate' },
+  calls: { crumb: 'Review', title: 'Calls' },
+  label: { crumb: 'Review', title: 'Labeling' },
+  results: { crumb: 'Measure', title: 'Results' },
+};
+
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, onSelectTab, isSampleData }) => {
-  const navItems: { id: ActiveTab; label: string; icon: string; badge?: string }[] = [
-    { id: 'live', label: 'Agent Studio', icon: '🎙️' },
-    { id: 'calls', label: 'Call Telemetry', icon: '📊' },
-    { id: 'results', label: 'Eval Suite', icon: '🎯' },
-    { id: 'label', label: 'Dataset Labeling', icon: '🏷️' },
-    { id: 'translate', label: 'Translator', icon: '🌐' },
-  ];
-
   return (
-    <header
-      className="glass-header"
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
-        padding: '0 24px',
-        height: '64px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}
-    >
-      {/* Brand & Identity */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => onSelectTab('live')}>
-          <div
-            style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 16px rgba(99, 102, 241, 0.4)',
-            }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="22" />
-            </svg>
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.02em', color: '#fff' }}>
-                Vocalis<span style={{ color: '#818cf8' }}>AI</span>
-              </span>
-              <span
-                style={{
-                  fontSize: '0.65rem',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  padding: '1px 6px',
-                  borderRadius: '6px',
-                  background: 'rgba(99, 102, 241, 0.15)',
-                  color: '#a5b4fc',
-                  border: '1px solid rgba(99, 102, 241, 0.3)',
-                  letterSpacing: '0.04em',
-                }}
-              >
-                PROD
-              </span>
+    <>
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div
+              style={{
+                width: 30, height: 30, borderRadius: 8, background: '#fff', color: '#0c111d',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14,
+              }}
+            >
+              V
             </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', letterSpacing: '-0.01em' }}>
-              Real-time Voice Pipeline & Compliance Suite
+            <div>
+              <div style={{ color: '#fff', fontWeight: 700, fontSize: 14, letterSpacing: '-0.01em', lineHeight: 1.1 }}>
+                Vocalis
+              </div>
+              <div style={{ fontSize: 11, color: '#667085' }}>Voice infrastructure</div>
             </div>
           </div>
         </div>
 
-        {/* Navigation Tabs Pill Container */}
-        <nav
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            background: 'rgba(255, 255, 255, 0.04)',
-            padding: '3px',
-            borderRadius: '10px',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            gap: '2px',
-          }}
-        >
-          {navItems.map((item) => {
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => onSelectTab(item.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 14px',
-                  borderRadius: '7px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontWeight: isActive ? 600 : 500,
-                  fontSize: '0.82rem',
-                  background: isActive ? 'rgba(99, 102, 241, 0.22)' : 'transparent',
-                  color: isActive ? '#ffffff' : 'var(--text-secondary)',
-                  boxShadow: isActive ? '0 2px 8px rgba(99, 102, 241, 0.25)' : 'none',
-                  outline: isActive ? '1px solid rgba(99, 102, 241, 0.45)' : 'none',
-                  transition: 'all 0.15s ease-in-out',
-                }}
-              >
-                <span style={{ fontSize: '0.9rem', opacity: isActive ? 1 : 0.7 }}>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
+        <nav className="sidebar-nav">
+          {GROUPS.map((g) => (
+            <div key={g.section}>
+              <div className="sidebar-section">{g.section}</div>
+              {g.items.map((item) => (
+                <button
+                  key={item.id}
+                  className={`sidebar-item ${activeTab === item.id ? 'active' : ''}`}
+                  onClick={() => onSelectTab(item.id)}
+                >
+                  {Icons[item.id]}
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          ))}
         </nav>
-      </div>
 
-      {/* Right side: Live engine connectivity & status badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-        {isSampleData ? (
+        <div className="sidebar-foot">
           <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              padding: '5px 12px',
-              borderRadius: '9999px',
-              background: 'rgba(245, 158, 11, 0.12)',
-              color: '#fbbf24',
-              border: '1px solid rgba(245, 158, 11, 0.3)',
+              display: 'flex', alignItems: 'center', gap: 8, fontSize: 12,
+              padding: '8px 10px', borderRadius: 8,
+              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+              color: isSampleData ? '#fedf89' : '#a6f4c5',
             }}
           >
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#fbbf24' }} />
-            <span>Sample Mode (Offline)</span>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'currentColor', flexShrink: 0 }} />
+            <span style={{ fontWeight: 600 }}>{isSampleData ? 'Sample data' : 'Engine · :8443'}</span>
           </div>
-        ) : (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              padding: '5px 14px',
-              borderRadius: '9999px',
-              background: 'rgba(16, 185, 129, 0.1)',
-              color: '#34d399',
-              border: '1px solid rgba(16, 185, 129, 0.25)',
-            }}
-          >
-            <div style={{ position: 'relative', width: '8px', height: '8px' }}>
-              <div
-                className="pulse-active"
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  borderRadius: '50%',
-                  background: '#10b981',
-                }}
-              />
-            </div>
-            <span>Engine Connected (8443)</span>
-          </div>
-        )}
-
-        <div
-          style={{
-            height: '24px',
-            width: '1px',
-            background: 'var(--border-subtle)',
-          }}
-        />
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div
-            style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '0.8rem',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-            }}
-            title="Production Pipeline Latency Target: <500ms"
-          >
-            ⚡
+          <div style={{ fontSize: 11, color: '#667085', marginTop: 8, padding: '0 2px' }}>
+            {isSampleData ? 'API unreachable — local fixture set.' : 'Live gateway reachable.'}
           </div>
         </div>
-      </div>
-    </header>
+      </aside>
+    </>
   );
 };
 
+export const Topbar: React.FC<{ activeTab: ActiveTab; isSampleData: boolean; onHome: () => void; onSelectTab: (t: ActiveTab) => void }> = ({
+  activeTab,
+  isSampleData,
+  onHome,
+  onSelectTab,
+}) => {
+  const t = TITLES[activeTab];
+  const ids: ActiveTab[] = ['live', 'calls', 'results', 'label', 'translate'];
+  const labels: Record<ActiveTab, string> = { live: 'Live', calls: 'Calls', results: 'Results', label: 'Label', translate: 'Translate' };
+  return (
+    <div className="topbar">
+      <button onClick={onHome} className="btn btn-sm" style={{ padding: '4px 10px' }}>
+        Vocalis
+      </button>
+      <span className="topbar-crumb">
+        {t.crumb} <span style={{ margin: '0 4px' }}>/</span>
+      </span>
+      <span className="topbar-title">{t.title}</span>
+      <nav className="topbar-nav" aria-label="Primary">
+        {ids.map((id) => (
+          <button key={id} className={activeTab === id ? 'active' : ''} onClick={() => onSelectTab(id)}>
+            {labels[id]}
+          </button>
+        ))}
+      </nav>
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+        {isSampleData ? (
+          <span className="badge badge-warning">Sample data</span>
+        ) : (
+          <span className="badge badge-success"><span className="dot" />Live</span>
+        )}
+        <span className="badge badge-neutral mono">p50 target &lt; 500ms</span>
+      </div>
+    </div>
+  );
+};
