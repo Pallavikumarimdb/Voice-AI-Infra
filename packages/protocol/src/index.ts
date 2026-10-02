@@ -48,8 +48,10 @@ export interface TranslatedMessage {
 export interface HUDMessage {
   type: 'hud';
   queueDepth: number;
-  gpuUtil: number;
-  rtf: number;
+  /** Null when the backend has no real measurement — clients must render "—", never a guess. */
+  gpuUtil: number | null;
+  /** Null when the backend has no real measurement — clients must render "—", never a guess. */
+  rtf: number | null;
   agentTurnLatencyMs?: number;
   ttsFirstAudioMs?: number;
   e2eAgentLatencyMs?: number;
@@ -165,6 +167,14 @@ export interface InterruptMessage {
   reason?: string;
 }
 
+/** Pipeline status signal (e.g. downstream reconnects). Never carries transcript content. */
+export interface StatusMessage {
+  type: 'status';
+  status: 'stt_reconnecting' | 'stt_restored' | 'stt_unavailable';
+  message?: string;
+  tEmit: number;
+}
+
 export type GatewayMessage =
   | PartialMessage
   | FinalMessage
@@ -174,6 +184,7 @@ export type GatewayMessage =
   | AgentSpeechStartMessage
   | AgentSpeechEndMessage
   | InterruptMessage
+  | StatusMessage
   | HUDMessage
   | ErrorMessage;
 

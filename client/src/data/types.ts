@@ -95,7 +95,8 @@ export interface CallSummaryItem {
   variant: string;
   persona: string;
   outcome: string;
-  hardFailPassed: boolean;
+  /** Null when the call was never evaluated (e.g. a raw live audit log). */
+  hardFailPassed: boolean | null;
   hasComplianceBlock: boolean;
   hasEscalation: boolean;
   totalTurns: number;
@@ -147,12 +148,12 @@ export interface EvalVariantSummary {
   totalCalls: number;
   hardFailFinalRate: number;
   attemptedViolations: number;
-  finalViolations: number;
+  /** Null when not derivable from result files — UI must render "—". */
+  finalViolations: number | null;
   promiseRate: number;
   avgJudgeScore: number;
   latencyP50: number;
   latencyP95: number;
-  costPer1k: number;
 }
 
 export interface HumanLabel {

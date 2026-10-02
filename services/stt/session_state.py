@@ -39,6 +39,10 @@ class SessionState:
         self.active_audio = np.array([], dtype=np.float32)
         self.last_capture_time_ms = 0
         self.last_asr_run_time_ms = 0
+        # Guards against CPU death spiral: never overlap transcribes, and don't
+        # burn CPU transcribing long silence (which also causes hallucinations).
+        self.asr_busy = False
+        self.last_speech_ms = 0
 
     def append_audio(self, audio_chunk: np.ndarray, t_capture_ms: int):
         self.last_capture_time_ms = t_capture_ms

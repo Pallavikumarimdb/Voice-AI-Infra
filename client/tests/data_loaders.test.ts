@@ -154,16 +154,22 @@ describe('Data Loaders & Hash Chain Tests', () => {
     assert.strictEqual(parsed.runs[0].promise_to_pay, true);
   });
 
-  it('parses summary CSV lines', () => {
-    const csv = `Variant,Total Calls,Hard-Fail Final (%),Attempted Violations,Final Violations,Promise Rate (%),Avg Judge Score,Latency p50 (ms),Latency p95 (ms),Cost / 1k Calls ($)
-v1_baseline,20,20.0,4,4,20.0,3.65,392.4,561.2,3.42
-v2_graph,20,0.0,0,0,30.0,4.70,158.4,452.1,1.86`;
+  it('parses summary CSV lines (real quoted format, exact column mapping)', () => {
+    const csv = `variant,sample_size,final_hard_fail_pct,attempted_violations,promise_rate_pct,judge_mean_score,latency_p50_ms,latency_p95_ms
+v1_baseline,20,"20.0% [10.0%, 30.0%]",4,"20.0% [10.0%, 30.0%]","3.65 [3.4, 3.9]",392.4ms,561.2ms
+v2_graph,20,"0.0% [0.0%, 5.0%]",0,"30.0% [20.0%, 40.0%]","4.70 [4.5, 4.9]",158.4ms,452.1ms`;
 
     const summary = parseSummaryCsv(csv);
     assert.strictEqual(summary.length, 2);
     assert.strictEqual(summary[0].variant, 'v1_baseline');
     assert.strictEqual(summary[1].hardFailFinalRate, 0.0);
+    assert.strictEqual(summary[1].attemptedViolations, 0);
+    assert.strictEqual(summary[1].promiseRate, 30.0);
     assert.strictEqual(summary[1].avgJudgeScore, 4.70);
+    assert.strictEqual(summary[1].latencyP50, 158.4);
+    assert.strictEqual(summary[1].latencyP95, 452.1);
+    // Not present in the file: must stay null, never defaulted or guessed.
+    assert.strictEqual(summary[1].finalViolations, null);
   });
 
   it('parses and serializes human labels CSV', () => {
@@ -213,29 +219,32 @@ expected_good_outcomes:
     assert.strictEqual(persona.scripted_turns.length, 2);
   });
 
-  it('asserts that displayed summary values equal source CSV values exactly (no fabrication)', () => {
-    const sourceCsvPath = path.resolve(process.cwd(), 'eval/agent/results/summary.csv');
-    const sampleJsonPath = path.resolve(process.cwd(), 'client/public/sample-data/summary.json');
+  it('parses the real eval summary CSV with exact values (no fabrication)', () => {
+    const candidates = [
+      path.resolve(process.cwd(), 'eval/agent/results/summary.csv'),
+      path.resolve(process.cwd(), '..', 'eval/agent/results/summary.csv'),
+    ];
+    const sourceCsvPath = candidates.find((p) => fs.existsSync(p));
 
-    if (fs.existsSync(sourceCsvPath) && fs.existsSync(sampleJsonPath)) {
-      const sourceCsv = fs.readFileSync(sourceCsvPath, 'utf-8');
-      const sampleJson = JSON.parse(fs.readFileSync(sampleJsonPath, 'utf-8'));
-
-      const parsedSource = parseSummaryCsv(sourceCsv);
-      const parsedSample = parseSummaryCsv(sampleJson.csv);
-
-      assert.strictEqual(parsedSample.length, parsedSource.length);
-      for (let i = 0; i < parsedSource.length; i++) {
-        assert.strictEqual(parsedSample[i].variant, parsedSource[i].variant);
-        assert.strictEqual(parsedSample[i].totalCalls, parsedSource[i].totalCalls);
-        assert.strictEqual(parsedSample[i].hardFailFinalRate, parsedSource[i].hardFailFinalRate);
-        assert.strictEqual(parsedSample[i].finalViolations, parsedSource[i].finalViolations);
-        assert.strictEqual(parsedSample[i].promiseRate, parsedSource[i].promiseRate);
-        assert.strictEqual(parsedSample[i].avgJudgeScore, parsedSource[i].avgJudgeScore);
-        assert.strictEqual(parsedSample[i].latencyP50, parsedSource[i].latencyP50);
-        assert.strictEqual(parsedSample[i].latencyP95, parsedSource[i].latencyP95);
-        assert.strictEqual(parsedSample[i].costPer1k, parsedSource[i].costPer1k);
-      }
+    if (!sourceCsvPath) {
+      throw new Error('Real eval summary.csv missing — refusing to test against fixtures.');
     }
+    const sourceCsv = fs.readFileSync(sourceCsvPath, 'utf-8');
+    const parsed = parseSummaryCsv(sourceCsv);
+
+    assert.ok(parsed.length >= 4, 'expected at least 4 variants');
+    const byVariant = new Map(parsed.map((v) => [v.variant, v]));
+    for (const name of ['v1_baseline', 'v2_graph', 'v1_no_guard', 'v2_graph_no_slow_path']) {
+      assert.ok(byVariant.has(name), `missing variant ${name}`);
+    }
+    const v2 = byVariant.get('v2_graph')!;
+    assert.strictEqual(v2.totalCalls, 50);
+    assert.strictEqual(v2.hardFailFinalRate, 50.0);
+    assert.strictEqual(v2.attemptedViolations, 35);
+    assert.strictEqual(v2.promiseRate, 30.0);
+    assert.strictEqual(v2.avgJudgeScore, 4.18);
+    assert.strictEqual(v2.latencyP50, 0.4);
+    assert.strictEqual(v2.latencyP95, 2.1);
+    assert.strictEqual(v2.finalViolations, null);
   });
 });

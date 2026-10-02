@@ -16,7 +16,9 @@ export const App: React.FC = () => {
   const [calls, setCalls] = useState<CallSummaryItem[]>([]);
   const [loadingCalls, setLoadingCalls] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [isSampleData, setIsSampleData] = useState(false);
+  const [callsError, setCallsError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [apiOnline, setApiOnline] = useState(true);
 
   // Sync state from current URL
   useEffect(() => {
@@ -67,10 +69,16 @@ export const App: React.FC = () => {
   useEffect(() => {
     async function fetchCalls() {
       setLoadingCalls(true);
-      const res = await apiClient.getCalls();
-      setCalls(res.data);
-      setIsSampleData(res.isSampleData);
-      setLoadingCalls(false);
+      setCallsError(null);
+      try {
+        setCalls(await apiClient.getCalls());
+        setApiOnline(true);
+      } catch (err: any) {
+        setCallsError(err?.message || 'Failed to load calls.');
+        setApiOnline(false);
+      } finally {
+        setLoadingCalls(false);
+      }
     }
     fetchCalls();
   }, []);
@@ -80,14 +88,16 @@ export const App: React.FC = () => {
     async function fetchDetail() {
       if (!selectedCallId) {
         setActiveCallDetail(null);
+        setDetailError(null);
         return;
       }
       setLoadingDetail(true);
+      setDetailError(null);
       try {
-        const res = await apiClient.getCallDetail(selectedCallId);
-        setActiveCallDetail(res.data);
-        setIsSampleData(res.isSampleData);
-      } catch (err) {
+        setActiveCallDetail(await apiClient.getCallDetail(selectedCallId));
+      } catch (err: any) {
+        setActiveCallDetail(null);
+        setDetailError(err?.message || 'Failed to load call record.');
         console.error('Failed to load call detail:', err);
       } finally {
         setLoadingDetail(false);
@@ -102,11 +112,11 @@ export const App: React.FC = () => {
       <Navbar
         activeTab={activeTab}
         onSelectTab={(tab) => navigateTo(tab, null)}
-        isSampleData={isSampleData}
+        apiOnline={apiOnline}
       />
 
       <div className="main-col">
-        <Topbar activeTab={activeTab} isSampleData={isSampleData} onHome={() => navigateTo('live', null)} onSelectTab={(tab) => navigateTo(tab, null)} />
+        <Topbar activeTab={activeTab} apiOnline={apiOnline} onHome={() => navigateTo('live', null)} onSelectTab={(tab) => navigateTo(tab, null)} />
         {/* Main View Router */}
         <main style={{ flex: 1, minWidth: 0 }}>
         {activeTab === 'live' && (
@@ -118,6 +128,7 @@ export const App: React.FC = () => {
             calls={calls}
             onSelectCall={(id) => navigateTo('calls', id)}
             loading={loadingCalls}
+            error={callsError}
           />
         )}
 
@@ -133,7 +144,7 @@ export const App: React.FC = () => {
             />
           ) : (
             <div className="page"><div className="card card-pad" style={{ textAlign: 'center' }}>
-              <div>Call record not found.</div>
+              <div>{detailError || 'Call record not found.'}</div>
               <button className="btn" style={{ marginTop: 12 }} onClick={() => navigateTo('calls', null)}>
                 Back to list
               </button>

@@ -12,6 +12,7 @@ const MAX_BUFFERED_BYTES = parseInt(process.env.MAX_BUFFERED_BYTES || '262144', 
  */
 export function forwardAudioFrame(session: Session, frame: Buffer): boolean {
   if (!session.sttWs || session.sttWs.readyState !== WebSocket.OPEN) {
+    session.audioChannelDepth = 0;
     return false;
   }
 

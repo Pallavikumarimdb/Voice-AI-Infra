@@ -21,7 +21,9 @@ export const LabelingScreen: React.FC<LabelingScreenProps> = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [activeCall, setActiveCall] = useState<CallDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [scores, setScores] = useState<Record<string, number>>({
     human_listening_score: 5,
@@ -37,22 +39,27 @@ export const LabelingScreen: React.FC<LabelingScreenProps> = () => {
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const res = await apiClient.getLabels();
-      setLabels(res.data);
-      if (res.data.length > 0) loadTranscript(res.data[0]);
-      setLoading(false);
+      setLoadError(null);
+      try {
+        const rows = await apiClient.getLabels();
+        setLabels(rows);
+        if (rows.length > 0) loadTranscript(rows[0]);
+      } catch (err: any) {
+        setLoadError(err?.message || 'Failed to load labeling set.');
+      } finally {
+        setLoading(false);
+      }
     }
     loadData();
   }, []);
 
   async function loadTranscript(label: HumanLabel) {
-    const callRes = await apiClient.getCalls();
-    const matchingCall = callRes.data.find(
+    const allCalls = await apiClient.getCalls();
+    const matchingCall = allCalls.find(
       (c) => c.persona === label.persona_id || c.id.includes(label.persona_id)
-    ) || callRes.data[0];
+    ) || allCalls[0];
     if (matchingCall) {
-      const detailRes = await apiClient.getCallDetail(matchingCall.id);
-      setActiveCall(detailRes.data);
+      setActiveCall(await apiClient.getCallDetail(matchingCall.id));
     }
     if (label.human_listening_score) {
       setScores({
@@ -78,6 +85,7 @@ export const LabelingScreen: React.FC<LabelingScreenProps> = () => {
   const handleSelectTranscript = (idx: number) => {
     setSelectedIndex(idx);
     setSaveStatus(null);
+    setSaveError(null);
     loadTranscript(labels[idx]);
   };
 
@@ -98,6 +106,7 @@ export const LabelingScreen: React.FC<LabelingScreenProps> = () => {
     };
     const res = await apiClient.saveLabel(updated);
     if (res.success) {
+      setSaveError(null);
       setSaveStatus('Saved to CSV');
       const updatedLabels = [...labels];
       updatedLabels[selectedIndex] = updated;
@@ -105,6 +114,9 @@ export const LabelingScreen: React.FC<LabelingScreenProps> = () => {
       if (selectedIndex < labels.length - 1) {
         setTimeout(() => handleSelectTranscript(selectedIndex + 1), 500);
       }
+    } else {
+      setSaveStatus(null);
+      setSaveError(res.error || 'Save failed — rating was not recorded.');
     }
   };
 
@@ -121,6 +133,11 @@ export const LabelingScreen: React.FC<LabelingScreenProps> = () => {
 
       {loading ? (
         <div className="card card-pad" style={{ textAlign: 'center', color: 'var(--text-tertiary)' }}>Loading labeling set…</div>
+      ) : loadError ? (
+        <div className="card card-pad" style={{ textAlign: 'center', borderColor: 'var(--danger-border)', background: 'var(--danger-soft)' }}>
+          <div style={{ fontWeight: 650, color: 'var(--danger)' }}>Could not load labeling set</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{loadError}</div>
+        </div>
       ) : labels.length === 0 ? (
         <EmptyState title="No transcripts in labeling set" />
       ) : (
@@ -234,6 +251,7 @@ export const LabelingScreen: React.FC<LabelingScreenProps> = () => {
                 Save & next
               </button>
               {saveStatus && <div style={{ fontSize: 12.5, color: 'var(--success)', textAlign: 'center' }}>{saveStatus}</div>}
+              {saveError && <div style={{ fontSize: 12.5, color: 'var(--danger)', textAlign: 'center' }}>{saveError}</div>}
               <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', textAlign: 'center' }}>Keys 1–5 set score · Enter saves</div>
             </div>
           </div>

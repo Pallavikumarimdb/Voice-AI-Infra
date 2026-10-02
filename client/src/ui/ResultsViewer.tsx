@@ -12,14 +12,21 @@ export const ResultsViewer: React.FC<ResultsViewerProps> = ({ onSelectVariantFil
   const [variants, setVariants] = useState<EvalVariantSummary[]>([]);
   const [paretoData, setParetoData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadSummary() {
       setLoading(true);
-      const res = await apiClient.getSummary();
-      setVariants(res.data.variants);
-      if (res.data.pareto?.pareto) setParetoData(res.data.pareto.pareto);
-      setLoading(false);
+      setError(null);
+      try {
+        const res = await apiClient.getSummary();
+        setVariants(res.variants);
+        if (res.pareto?.pareto) setParetoData(res.pareto.pareto);
+      } catch (err: any) {
+        setError(err?.message || 'Failed to load evaluation results.');
+      } finally {
+        setLoading(false);
+      }
     }
     loadSummary();
   }, []);
@@ -37,6 +44,11 @@ export const ResultsViewer: React.FC<ResultsViewerProps> = ({ onSelectVariantFil
 
       {loading ? (
         <div className="card card-pad" style={{ textAlign: 'center', color: 'var(--text-tertiary)' }}>Loading evaluation metrics…</div>
+      ) : error ? (
+        <div className="card card-pad" style={{ textAlign: 'center', borderColor: 'var(--danger-border)', background: 'var(--danger-soft)' }}>
+          <div style={{ fontWeight: 650, color: 'var(--danger)' }}>Could not load evaluation results</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{error}</div>
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {variants.length > 0 && (
@@ -76,7 +88,6 @@ export const ResultsViewer: React.FC<ResultsViewerProps> = ({ onSelectVariantFil
                   <th style={{ textAlign: 'right' }}>Judge</th>
                   <th style={{ textAlign: 'right' }}>p50</th>
                   <th style={{ textAlign: 'right' }}>p95</th>
-                  <th style={{ textAlign: 'right' }}>Cost / 1k</th>
                 </tr>
               </thead>
               <tbody>
@@ -91,12 +102,11 @@ export const ResultsViewer: React.FC<ResultsViewerProps> = ({ onSelectVariantFil
                     <td className="mono" style={{ textAlign: 'right', fontWeight: 700, color: v.hardFailFinalRate === 0 ? 'var(--success)' : 'var(--danger)' }}>
                       {v.hardFailFinalRate.toFixed(1)}%
                     </td>
-                    <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>{v.finalViolations} / {v.attemptedViolations}</td>
+                    <td className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>{v.finalViolations ?? '—'} / {v.attemptedViolations}</td>
                     <td className="mono" style={{ textAlign: 'right' }}>{v.promiseRate.toFixed(1)}%</td>
                     <td className="mono" style={{ textAlign: 'right', fontWeight: 650 }}>{v.avgJudgeScore.toFixed(2)}</td>
                     <td className="mono" style={{ textAlign: 'right' }}>{v.latencyP50.toFixed(0)} ms</td>
                     <td className="mono" style={{ textAlign: 'right', color: 'var(--text-tertiary)' }}>{v.latencyP95.toFixed(0)} ms</td>
-                    <td className="mono" style={{ textAlign: 'right' }}>${v.costPer1k.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>

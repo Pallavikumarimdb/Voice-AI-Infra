@@ -94,8 +94,18 @@ wss.on('connection', (clientWs: WebSocket) => {
     }
   };
 
-  // Connect downstream to STT Service
-  const connectSTT = () => {
+  // Connect downstream to STT Service (with auto-reconnect while the call is live)
+  const MAX_STT_RETRIES = 5;
+  let sttRetries = 0;
+  let sttReconnectTimer: NodeJS.Timeout | null = null;
+  const clearSttReconnectTimer = () => {
+    if (sttReconnectTimer) {
+      clearTimeout(sttReconnectTimer);
+      sttReconnectTimer = null;
+    }
+  };
+
+  const connectSTT = (isReconnect = false) => {
     session.sttWs = createSTTConnection(
       session,
       STT_URL,
@@ -289,8 +299,53 @@ wss.on('connection', (clientWs: WebSocket) => {
       },
       () => {
         console.log(`[Gateway] STT connection closed for session ${sessionId}`);
+        // Without reconnect, the client keeps streaming into a dead socket:
+        // frozen queue gauge, zero transcripts, and the call never recovers.
+        const sessionAlive =
+          session.isStarted &&
+          clientWs.readyState === WebSocket.OPEN &&
+          sessionManager.get(sessionId) !== undefined;
+        if (!sessionAlive) return;
+        if (sttRetries >= MAX_STT_RETRIES) {
+          sendJson(clientWs, {
+            type: 'error',
+            code: 'STT_UNAVAILABLE',
+            message: 'Speech recognition disconnected. Please restart the call.',
+          });
+          return;
+        }
+        sttRetries += 1;
+        const delayMs = Math.min(1000 * 2 ** (sttRetries - 1), 8000);
+        sendJson(clientWs, {
+          type: 'status',
+          status: 'stt_reconnecting',
+          message: `Speech recognition reconnecting (attempt ${sttRetries}/${MAX_STT_RETRIES})…`,
+          tEmit: Date.now(),
+        });
+        clearSttReconnectTimer();
+        sttReconnectTimer = setTimeout(() => {
+          sttReconnectTimer = null;
+          if (
+            session.isStarted &&
+            clientWs.readyState === WebSocket.OPEN &&
+            sessionManager.get(sessionId) !== undefined
+          ) {
+            connectSTT(true);
+          }
+        }, delayMs);
       }
     );
+    session.sttWs.on('open', () => {
+      if (isReconnect) {
+        sendJson(clientWs, {
+          type: 'status',
+          status: 'stt_restored',
+          message: 'Speech recognition reconnected.',
+          tEmit: Date.now(),
+        });
+      }
+      sttRetries = 0;
+    });
   };
 
   clientWs.on('message', (data: Buffer | ArrayBuffer | Buffer[] | string, isBinary: boolean) => {
@@ -348,6 +403,7 @@ wss.on('connection', (clientWs: WebSocket) => {
           sendJson(clientWs, { type: 'started', sessionId, mode: session.mode, config: session.config });
         } else if (msg.type === 'stop') {
           session.isStarted = false;
+          clearSttReconnectTimer();
           if (session.sttWs && session.sttWs.readyState === WebSocket.OPEN) {
             session.sttWs.send(JSON.stringify({ type: 'session_stop' }));
           }
@@ -361,6 +417,7 @@ wss.on('connection', (clientWs: WebSocket) => {
 
   clientWs.on('close', () => {
     console.log(`[Gateway] Client disconnected: ${sessionId}`);
+    clearSttReconnectTimer();
     metrics.activeSessions.dec();
     sessionManager.remove(sessionId);
   });
@@ -375,12 +432,17 @@ setInterval(() => {
   const sessions = sessionManager.getAll();
   for (const session of sessions) {
     if (session.clientWs.readyState === WebSocket.OPEN) {
+      // Report 0 when the STT leg is down so the HUD never shows a frozen
+      // stale backlog after a disconnect.
+      const sttOpen = session.sttWs && session.sttWs.readyState === WebSocket.OPEN;
       session.clientWs.send(
         JSON.stringify({
           type: 'hud',
-          queueDepth: session.audioChannelDepth,
-          gpuUtil: 0, // In production, fed by nvidia-smi exporter
-          rtf: 0.35,
+          queueDepth: sttOpen ? session.audioChannelDepth : 0,
+          // No GPU exporter or RTF probe is wired up: report unknown explicitly
+          // rather than a plausible-looking constant.
+          gpuUtil: null,
+          rtf: null,
         })
       );
     }

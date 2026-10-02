@@ -10,10 +10,11 @@ export const TranslatePanel: React.FC = () => {
   const [srcLang, setSrcLang] = useState('ja');
   const [tgtLang, setTgtLang] = useState('en');
   const [entries, setEntries] = useState<CaptionEntry[]>([]);
-  const [hudData, setHudData] = useState({ queueDepth: 0, gpuUtil: 0, rtf: 0.35 });
+  const [hudData, setHudData] = useState<{ queueDepth: number; gpuUtil: number | null; rtf: number | null }>({ queueDepth: 0, gpuUtil: null, rtf: null });
   const [asrCommitMs, setAsrCommitMs] = useState<number | undefined>();
   const [mtDurationMs, setMtDurationMs] = useState<number | undefined>();
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const sessionManagerRef = useRef<SessionManager | null>(null);
 
@@ -26,6 +27,10 @@ export const TranslatePanel: React.FC = () => {
       onStateChange: (newState) => setState(newState),
       onError: (err) => setError(err),
       onMessage: (msg: GatewayMessage) => {
+        if (msg.type === 'status') {
+          setNotice(msg.status === 'stt_restored' ? null : (msg.message || 'Speech recognition reconnecting…'));
+          return;
+        }
         if (msg.type === 'hud') {
           setHudData({ queueDepth: msg.queueDepth, gpuUtil: msg.gpuUtil, rtf: msg.rtf });
         } else if (msg.type === 'partial') {
@@ -57,6 +62,7 @@ export const TranslatePanel: React.FC = () => {
   const handleToggle = () => {
     if (state === 'idle') {
       setError(null);
+      setNotice(null);
       sessionManagerRef.current?.start(srcLang, tgtLang, 'translate');
     } else {
       sessionManagerRef.current?.stop();
@@ -97,6 +103,10 @@ export const TranslatePanel: React.FC = () => {
           mode="translate" lastCaptureToFinalMs={asrCommitMs} lastMtDurationMs={mtDurationMs}
         />
       </div>
+
+      {notice && (
+        <div className="card card-pad" style={{ borderColor: 'var(--accent-border)', background: 'var(--accent-soft)', color: 'var(--accent)', marginBottom: 12, fontSize: 13 }}>{notice}</div>
+      )}
 
       {error && (
         <div className="card card-pad" style={{ borderColor: 'var(--danger-border)', background: 'var(--danger-soft)', color: 'var(--danger)', marginBottom: 12, fontSize: 13 }}>{error}</div>

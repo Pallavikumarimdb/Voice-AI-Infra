@@ -10,7 +10,6 @@ interface CallInspectorProps {
 
 export const CallInspector: React.FC<CallInspectorProps> = ({ call, onBack }) => {
   const [revealHiddenFacts, setRevealHiddenFacts] = useState(false);
-  const [tamperedDemo, setTamperedDemo] = useState(false);
   const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
 
   const auditRecords = call.auditLog || [];
@@ -69,9 +68,7 @@ export const CallInspector: React.FC<CallInspectorProps> = ({ call, onBack }) =>
     turns.push(activeTurn);
   }
 
-  const effectiveHashChain = tamperedDemo
-    ? { valid: false, error: 'Hash mismatch at seq 4', verifiedCount: 3, brokenSeq: 4 }
-    : call.hashChain;
+  const effectiveHashChain = call.hashChain;
 
   const toggleTools = (idx: number) => {
     setExpandedTools((prev) => {
@@ -91,12 +88,7 @@ export const CallInspector: React.FC<CallInspectorProps> = ({ call, onBack }) =>
         title={call.id.length > 28 ? `${call.id.slice(0, 28)}…` : call.id}
         desc={`${call.variant} · ${call.personaId} · ${turns.length} turns · ${blockedTurns} guard interventions`}
         right={
-          <>
-            <button className="btn btn-sm" onClick={onBack}>Back to list</button>
-            <button className="btn btn-sm" onClick={() => setTamperedDemo((p) => !p)}>
-              {tamperedDemo ? 'Reset chain demo' : 'Test tamper detection'}
-            </button>
-          </>
+          <button className="btn btn-sm" onClick={onBack}>Back to list</button>
         }
       />
 

@@ -4,6 +4,7 @@ import time
 import struct
 import json
 import asyncio
+import traceback
 import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import PlainTextResponse
@@ -73,97 +74,137 @@ async def websocket_stream(websocket: WebSocket):
                 if len(raw_bytes) < 13:
                     continue
 
-                # Parse binary header: msgType(1B), seq(4B LE), tCapture(8B LE float64)
-                msg_type, seq, t_capture = struct.unpack_from("<BId", raw_bytes, 0)
+                try:
+                    # Parse binary header: msgType(1B), seq(4B LE), tCapture(8B LE float64)
+                    msg_type, seq, t_capture = struct.unpack_from("<BId", raw_bytes, 0)
+                except struct.error:
+                    continue
                 if msg_type != 0x01:
                     continue
 
                 pcm_bytes = raw_bytes[13:]
-                # Convert 16-bit signed PCM to float32 (-1.0 to 1.0)
-                pcm_data = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+                if len(pcm_bytes) == 0 or len(pcm_bytes) % 2 != 0:
+                    continue
+                try:
+                    # Convert 16-bit signed PCM to float32 (-1.0 to 1.0)
+                    pcm_data = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+                except (ValueError, BufferError):
+                    continue
 
                 now_ms = int(time.time() * 1000)
 
-                # 1. Evaluate VAD
-                with VAD_DURATION.time():
-                    is_speech, prob = vad_wrapper.is_speech(pcm_data)
+                try:
+                    # 1. Evaluate VAD
+                    with VAD_DURATION.time():
+                        is_speech, prob = vad_wrapper.is_speech(pcm_data)
+                    if is_speech:
+                        session.last_speech_ms = now_ms
 
-                # 2. Feed segmenter
-                finalized_segment = session.segmenter.on_frame(
-                    pcm_data,
-                    prob=prob,
-                    t_ms=now_ms,
-                    frame_ms=int(len(pcm_data) / 16.0) # 16 samples per ms at 16kHz
-                )
+                    # 2. Feed segmenter
+                    finalized_segment = session.segmenter.on_frame(
+                        pcm_data,
+                        prob=prob,
+                        t_ms=now_ms,
+                        frame_ms=int(len(pcm_data) / 16.0) # 16 samples per ms at 16kHz
+                    )
 
-                session.append_audio(pcm_data, int(t_capture))
+                    session.append_audio(pcm_data, int(t_capture))
 
-                # 3. If speech segment was finalized by VAD silence hangover / max length:
-                if finalized_segment is not None and len(finalized_segment) > 1600: # at least 100ms
-                    with ASR_DURATION.labels(model=asr_wrapper.model_size, chunk_ms="final").time():
-                        asr_result = await asyncio.to_thread(
-                            asr_wrapper.transcribe,
-                            finalized_segment,
-                            session.src_lang,
-                            True
-                        )
+                    # 2b. Drop stale silence: if the segmenter is idle and nothing
+                    # speech-like arrived for 5s, the buffer is dead air. Reset it
+                    # so partials don't transcribe (and hallucinate on) minutes
+                    # of accumulated silence, and CPU stays bounded on slow hosts.
+                    if (
+                        session.segmenter.state.name == "IDLE"
+                        and len(session.active_audio) > session.sample_rate * 5
+                        and (now_ms - session.last_speech_ms) > 5000
+                    ):
+                        session.active_audio = np.array([], dtype=np.float32)
 
-                    final_text = asr_result["text"]
-                    if final_text:
-                        COMMITTED_UTTERANCES.inc()
-                        final_msg = {
-                            "type": "final",
-                            "uttId": session.current_utt_id,
-                            "text": final_text,
-                            "words": asr_result["words"],
-                            "tCapture": session.last_capture_time_ms,
-                            "tFinal": int(time.time() * 1000)
-                        }
-                        await websocket.send_text(json.dumps(final_msg))
+                    # 3. If speech segment was finalized by VAD silence hangover / max length:
+                    if finalized_segment is not None and len(finalized_segment) > 1600: # at least 100ms
+                        if not session.asr_busy:
+                            session.asr_busy = True
+                            try:
+                                with ASR_DURATION.labels(model=asr_wrapper.model_size, chunk_ms="final").time():
+                                    asr_result = await asyncio.to_thread(
+                                        asr_wrapper.transcribe,
+                                        finalized_segment,
+                                        session.src_lang,
+                                        True
+                                    )
+                            finally:
+                                session.asr_busy = False
 
-                        # Log structured event for offline eval replays
-                        print(json.dumps({
-                            "sessionId": session.session_id,
-                            "uttId": session.current_utt_id,
-                            "stage": "asr_final",
-                            "tCapture": session.last_capture_time_ms,
-                            "tFinal": final_msg["tFinal"],
-                            "text": final_text
-                        }))
+                            final_text = asr_result["text"]
+                            if final_text:
+                                COMMITTED_UTTERANCES.inc()
+                                final_msg = {
+                                    "type": "final",
+                                    "uttId": session.current_utt_id,
+                                    "text": final_text,
+                                    "words": asr_result["words"],
+                                    "tCapture": session.last_capture_time_ms,
+                                    "tFinal": int(time.time() * 1000)
+                                }
+                                await websocket.send_text(json.dumps(final_msg))
 
-                        session.next_utterance()
+                                # Log structured event for offline eval replays
+                                print(json.dumps({
+                                    "sessionId": session.session_id,
+                                    "uttId": session.current_utt_id,
+                                    "stage": "asr_final",
+                                    "tCapture": session.last_capture_time_ms,
+                                    "tFinal": final_msg["tFinal"],
+                                    "text": final_text
+                                }))
 
-                # 4. Periodic partial ASR running every min_chunk_ms
-                elif len(session.active_audio) >= int((min_chunk_ms / 1000.0) * session.sample_rate):
-                    if (now_ms - session.last_asr_run_time_ms) >= min_chunk_ms:
-                        session.last_asr_run_time_ms = now_ms
+                                session.next_utterance()
 
-                        with ASR_DURATION.labels(model=asr_wrapper.model_size, chunk_ms=str(min_chunk_ms)).time():
-                            asr_result = await asyncio.to_thread(
-                                asr_wrapper.transcribe,
-                                session.active_audio,
-                                session.src_lang,
-                                True
-                            )
+                    # 4. Periodic partial ASR running every min_chunk_ms, but only
+                    # while speech is (or was very recently) active. Transcribing
+                    # pure silence wastes CPU on slow hosts and makes Whisper
+                    # hallucinate random phrases.
+                    elif len(session.active_audio) >= int((min_chunk_ms / 1000.0) * session.sample_rate):
+                        if (now_ms - session.last_asr_run_time_ms) >= min_chunk_ms:
+                            session.last_asr_run_time_ms = now_ms
 
-                        hypo = asr_result["text"]
-                        stabilizer_out = session.stabilizer.update(hypo, asr_result["words"])
+                            if session.asr_busy or (now_ms - session.last_speech_ms) > 2500:
+                                pass
+                            else:
+                                session.asr_busy = True
+                                try:
+                                    with ASR_DURATION.labels(model=asr_wrapper.model_size, chunk_ms=str(min_chunk_ms)).time():
+                                        asr_result = await asyncio.to_thread(
+                                            asr_wrapper.transcribe,
+                                            session.active_audio,
+                                            session.src_lang,
+                                            True
+                                        )
+                                finally:
+                                    session.asr_busy = False
 
-                        if stabilizer_out["trim_audio_s"] > 0:
-                            session.trim_active_audio(stabilizer_out["trim_audio_s"])
+                                hypo = asr_result["text"]
+                                stabilizer_out = session.stabilizer.update(hypo, asr_result["words"])
 
-                        full_stream_text = (stabilizer_out["committed"] + stabilizer_out["partial"]).strip()
-                        if full_stream_text:
-                            partial_msg = {
-                                "type": "partial",
-                                "uttId": session.current_utt_id,
-                                "seq": seq,
-                                "text": full_stream_text,
-                                "stableChars": stabilizer_out["stable_chars"],
-                                "tCapture": session.last_capture_time_ms,
-                                "tEmit": int(time.time() * 1000)
-                            }
-                            await websocket.send_text(json.dumps(partial_msg))
+                                if stabilizer_out["trim_audio_s"] > 0:
+                                    session.trim_active_audio(stabilizer_out["trim_audio_s"])
+
+                                full_stream_text = (stabilizer_out["committed"] + stabilizer_out["partial"]).strip()
+                                if full_stream_text:
+                                    partial_msg = {
+                                        "type": "partial",
+                                        "uttId": session.current_utt_id,
+                                        "seq": seq,
+                                        "text": full_stream_text,
+                                        "stableChars": stabilizer_out["stable_chars"],
+                                        "tCapture": session.last_capture_time_ms,
+                                        "tEmit": int(time.time() * 1000)
+                                    }
+                                    await websocket.send_text(json.dumps(partial_msg))
+                except Exception:
+                    # One bad frame must never kill the session; log and keep going.
+                    traceback.print_exc()
 
             elif "text" in message and message["text"] is not None:
                 # Handle JSON control frames

@@ -99,6 +99,11 @@ async def translate(req: TranslateRequest):
             decode_ms=res["decode_ms"],
             tokensOut=res["tokensOut"]
         )
+    except RuntimeError as e:
+        # Engine unavailable (e.g. no CUDA/vLLM): honest failure, never fake data.
+        TRANSLATIONS_TOTAL.labels(status="error").inc()
+        print(f"[MT] Engine unavailable for uttId {req.uttId}: {e}")
+        raise HTTPException(status_code=503, detail="Translation engine unavailable (requires CUDA GPU + vLLM)")
     except Exception as e:
         TRANSLATIONS_TOTAL.labels(status="error").inc()
         print(f"[MT] Translation error for uttId {req.uttId}: {e}")

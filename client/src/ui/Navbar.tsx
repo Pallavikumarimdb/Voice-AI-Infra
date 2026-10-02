@@ -6,7 +6,7 @@ export type ActiveTab = 'live' | 'calls' | 'results' | 'label' | 'translate';
 interface NavbarProps {
   activeTab: ActiveTab;
   onSelectTab: (tab: ActiveTab) => void;
-  isSampleData: boolean;
+  apiOnline: boolean;
 }
 
 const GROUPS: { section: string; items: { id: ActiveTab; label: string; desc: string }[] }[] = [
@@ -38,7 +38,7 @@ const TITLES: Record<ActiveTab, { crumb: string; title: string }> = {
   results: { crumb: 'Measure', title: 'Results' },
 };
 
-export const Navbar: React.FC<NavbarProps> = ({ activeTab, onSelectTab, isSampleData }) => {
+export const Navbar: React.FC<NavbarProps> = ({ activeTab, onSelectTab, apiOnline }) => {
   return (
     <>
       <aside className="sidebar">
@@ -85,14 +85,14 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onSelectTab, isSample
               display: 'flex', alignItems: 'center', gap: 8, fontSize: 12,
               padding: '8px 10px', borderRadius: 8,
               background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
-              color: isSampleData ? '#fedf89' : '#a6f4c5',
+              color: apiOnline ? '#a6f4c5' : '#fedf89',
             }}
           >
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'currentColor', flexShrink: 0 }} />
-            <span style={{ fontWeight: 600 }}>{isSampleData ? 'Sample data' : 'Engine · :8443'}</span>
+            <span style={{ fontWeight: 600 }}>{apiOnline ? 'API · :8443' : 'API unreachable'}</span>
           </div>
           <div style={{ fontSize: 11, color: '#667085', marginTop: 8, padding: '0 2px' }}>
-            {isSampleData ? 'API unreachable — local fixture set.' : 'Live gateway reachable.'}
+            {apiOnline ? 'Serving live pipeline data.' : 'Start the gateway to load data.'}
           </div>
         </div>
       </aside>
@@ -100,9 +100,9 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onSelectTab, isSample
   );
 };
 
-export const Topbar: React.FC<{ activeTab: ActiveTab; isSampleData: boolean; onHome: () => void; onSelectTab: (t: ActiveTab) => void }> = ({
+export const Topbar: React.FC<{ activeTab: ActiveTab; apiOnline: boolean; onHome: () => void; onSelectTab: (t: ActiveTab) => void }> = ({
   activeTab,
-  isSampleData,
+  apiOnline,
   onHome,
   onSelectTab,
 }) => {
@@ -126,8 +126,8 @@ export const Topbar: React.FC<{ activeTab: ActiveTab; isSampleData: boolean; onH
         ))}
       </nav>
       <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-        {isSampleData ? (
-          <span className="badge badge-warning">Sample data</span>
+        {!apiOnline ? (
+          <span className="badge badge-warning">API offline</span>
         ) : (
           <span className="badge badge-success"><span className="dot" />Live</span>
         )}

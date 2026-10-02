@@ -7,6 +7,7 @@ interface CallListProps {
   calls: CallSummaryItem[];
   onSelectCall: (id: string) => void;
   loading?: boolean;
+  error?: string | null;
 }
 
 function shortId(id: string) {
@@ -14,7 +15,7 @@ function shortId(id: string) {
   return `${id.slice(0, 8)}…${id.slice(-6)}`;
 }
 
-export const CallList: React.FC<CallListProps> = ({ calls, onSelectCall, loading = false }) => {
+export const CallList: React.FC<CallListProps> = ({ calls, onSelectCall, loading = false, error = null }) => {
   const [search, setSearch] = useState('');
   const [filterSource, setFilterSource] = useState('all');
   const [filterVariant, setFilterVariant] = useState('all');
@@ -35,8 +36,8 @@ export const CallList: React.FC<CallListProps> = ({ calls, onSelectCall, loading
       if (filterSource !== 'all' && c.source !== filterSource) return false;
       if (filterVariant !== 'all' && c.variant !== filterVariant) return false;
       if (filterPersona !== 'all' && c.persona !== filterPersona) return false;
-      if (filterHardFail === 'passed' && !c.hardFailPassed) return false;
-      if (filterHardFail === 'failed' && c.hardFailPassed) return false;
+      if (filterHardFail === 'passed' && c.hardFailPassed !== true) return false;
+      if (filterHardFail === 'failed' && c.hardFailPassed !== false) return false;
       if (filterBlocked === 'blocked' && !c.hasComplianceBlock) return false;
       if (filterBlocked === 'none' && c.hasComplianceBlock) return false;
       return true;
@@ -49,7 +50,7 @@ export const CallList: React.FC<CallListProps> = ({ calls, onSelectCall, loading
     return filteredCalls.slice(start, start + pageSize);
   }, [filteredCalls, page]);
 
-  const fails = calls.filter((c) => !c.hardFailPassed).length;
+  const fails = calls.filter((c) => c.hardFailPassed === false).length;
   const blocked = calls.filter((c) => c.hasComplianceBlock).length;
 
   const selectStyle: React.CSSProperties = { maxWidth: 170 };
@@ -108,6 +109,11 @@ export const CallList: React.FC<CallListProps> = ({ calls, onSelectCall, loading
 
       {loading ? (
         <div className="card card-pad" style={{ textAlign: 'center', color: 'var(--text-tertiary)' }}>Loading calls…</div>
+      ) : error ? (
+        <div className="card card-pad" style={{ textAlign: 'center', borderColor: 'var(--danger-border)', background: 'var(--danger-soft)' }}>
+          <div style={{ fontWeight: 650, color: 'var(--danger)' }}>Could not load calls</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{error}</div>
+        </div>
       ) : paginatedCalls.length === 0 ? (
         <EmptyState title="No calls match these filters" desc="Clear search or widen the variant / persona filters." />
       ) : (
@@ -129,7 +135,7 @@ export const CallList: React.FC<CallListProps> = ({ calls, onSelectCall, loading
               </thead>
               <tbody>
                 {paginatedCalls.map((call) => {
-                  const rowClass = !call.hardFailPassed ? 'row-danger' : call.hasComplianceBlock ? 'row-warn' : '';
+                  const rowClass = call.hardFailPassed === false ? 'row-danger' : call.hasComplianceBlock ? 'row-warn' : '';
                   return (
                     <tr key={call.id} className={rowClass} onClick={() => onSelectCall(call.id)} style={{ cursor: 'pointer' }}>
                       <td>
@@ -145,7 +151,7 @@ export const CallList: React.FC<CallListProps> = ({ calls, onSelectCall, loading
                         {call.promiseSecured ? 'Promise secured' : call.outcome}
                       </td>
                       <td><ComplianceBadge blocked={call.hasComplianceBlock} /></td>
-                      <td><HardFailBadge passed={call.hardFailPassed} /></td>
+                      <td>{call.hardFailPassed === null ? <span style={{ color: 'var(--text-dim)', fontSize: 12.5 }} title="Never evaluated">—</span> : <HardFailBadge passed={call.hardFailPassed} />}</td>
                       <td className="mono" style={{ textAlign: 'right' }}>{call.totalTurns}</td>
                       <td style={{ textAlign: 'right' }}>
                         <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); onSelectCall(call.id); }}>

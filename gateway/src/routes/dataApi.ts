@@ -136,19 +136,40 @@ export async function handleDataApi(
           if (calls.some((c) => c.id === sessionId)) continue;
 
           try {
-            const firstLine = fs.readFileSync(path.join(AUDIT_DIR, file), 'utf-8').split('\n')[0];
-            const firstRecord = firstLine ? JSON.parse(firstLine) : {};
+            const content = fs.readFileSync(path.join(AUDIT_DIR, file), 'utf-8');
+            const lines = content.split('\n').filter((l) => l.trim());
+            let utteranceTurns = 0;
+            let blocked = false;
+            let firstTs = Date.now();
+            let sawTs = false;
+            for (const line of lines) {
+              try {
+                const rec = JSON.parse(line);
+                if (!sawTs && typeof rec.ts === 'number') {
+                  firstTs = rec.ts;
+                  sawTs = true;
+                }
+                if (rec.stage === 'user_utterance' || rec.stage === 'agent_utterance') {
+                  utteranceTurns += 1;
+                }
+                if (rec.stage === 'compliance_block') {
+                  blocked = true;
+                }
+              } catch {}
+            }
             calls.push({
               id: sessionId,
               source: sessionId.startsWith('sim_') ? 'sim' : 'live',
               variant: sessionId.includes('v2_graph') ? 'v2_graph' : sessionId.includes('v1_baseline') ? 'v1_baseline' : 'live_agent',
               persona: sessionId.includes('cooperative') ? 'cooperative' : sessionId.includes('hostile') ? 'hostile' : 'live_caller',
-              outcome: 'completed',
-              hardFailPassed: true,
-              hasComplianceBlock: false,
+              outcome: 'recorded',
+              // Raw audit rows were never run through the eval harness:
+              // report unknown instead of a passing grade.
+              hardFailPassed: null,
+              hasComplianceBlock: blocked,
               hasEscalation: false,
-              totalTurns: 5,
-              timestamp: firstRecord.ts || Date.now(),
+              totalTurns: utteranceTurns,
+              timestamp: firstTs,
               promiseSecured: false,
             });
           } catch {}
@@ -219,6 +240,12 @@ export async function handleDataApi(
       }
     }
 
+    // No audit trail and no eval run: the record genuinely does not exist.
+    if (auditLog.length === 0 && !runData) {
+      sendJson(res, 404, { error: `Call record '${id}' not found` });
+      return true;
+    }
+
     sendJson(res, 200, {
       id,
       source: id.startsWith('sim_') ? 'sim' : 'live',
@@ -242,10 +269,27 @@ export async function handleDataApi(
       const mdContent = fs.existsSync(mdPath) ? fs.readFileSync(mdPath, 'utf-8') : '';
       const pareto = fs.existsSync(paretoPath) ? JSON.parse(fs.readFileSync(paretoPath, 'utf-8')) : null;
 
+      // Final-violation totals are not in summary.csv: aggregate them honestly
+      // from the per-run hard_fail records instead of guessing.
+      const computedFinalViolations: Record<string, number> = {};
+      for (const variant of ['v2_graph', 'v1_baseline', 'v1_no_guard', 'v2_graph_no_slow_path']) {
+        const runFile = path.join(RESULTS_DIR, `runs_${variant}.json`);
+        if (!fs.existsSync(runFile)) continue;
+        try {
+          const data = JSON.parse(fs.readFileSync(runFile, 'utf-8'));
+          let total = 0;
+          for (const r of data.runs || []) {
+            total += r.hard_fail?.num_final || 0;
+          }
+          computedFinalViolations[variant] = total;
+        } catch {}
+      }
+
       sendJson(res, 200, {
         csv: csvContent,
         markdown: mdContent,
         pareto,
+        computedFinalViolations,
       });
       return true;
     } catch (err: any) {

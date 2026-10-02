@@ -1,7 +1,8 @@
 /**
  * Unified Client Data Service.
- * Attempts to fetch live data from /api; falls back automatically to
- * /sample-data/ if the API is unreachable, providing a seamless reviewer experience.
+ * Reads live data from /api only. No fixtures, no silent fallbacks:
+ * every failure throws with a clear message so the UI can show an
+ * honest empty/error state instead of fabricated numbers.
  */
 
 import {
@@ -19,171 +20,85 @@ import {
 } from './loaders.ts';
 import { verifyHashChain } from './hashChain.ts';
 
-export interface ApiResult<T> {
-  data: T;
-  isSampleData: boolean;
-  error?: string;
+async function fetchJson(path: string, init?: RequestInit): Promise<any> {
+  let res: Response;
+  try {
+    res = await fetch(path, init);
+  } catch {
+    throw new Error(`Data API unreachable at ${path}. Is the gateway running on :8443?`);
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const detail = typeof body?.error === 'string' ? `: ${body.error}` : '';
+    throw new Error(`Data API ${res.status} at ${path}${detail}`);
+  }
+  return res.json();
+}
+
+function toCallDetail(raw: any): CallDetail {
+  const hashChain: AuditVerifyResult = verifyHashChain(raw.auditLog || []);
+  const personaObj = raw.persona?.content ? parsePersonaYaml(raw.persona.content) : null;
+  return {
+    id: raw.id,
+    source: raw.source || 'sim',
+    variant: raw.variant || 'v2_graph',
+    personaId: raw.personaId || 'cooperative',
+    auditLog: raw.auditLog || [],
+    handoff: raw.handoff || null,
+    runData: raw.runData || null,
+    persona: personaObj,
+    hashChain,
+  };
 }
 
 export class ApiClient {
-  private sampleDataActive = false;
-
-  public isUsingSampleData(): boolean {
-    return this.sampleDataActive;
+  /** List of all calls (live and simulated) from the data API. */
+  async getCalls(): Promise<CallSummaryItem[]> {
+    return fetchJson('/api/calls');
   }
 
-  /**
-   * Fetches list of all calls (live and simulated).
-   */
-  async getCalls(): Promise<ApiResult<CallSummaryItem[]>> {
-    try {
-      const res = await fetch('/api/calls');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      this.sampleDataActive = false;
-      return { data, isSampleData: false };
-    } catch {
-      // Fallback to static sample data
-      this.sampleDataActive = true;
-      const res = await fetch('/sample-data/calls.json');
-      const data = await res.json();
-      return { data, isSampleData: true };
-    }
+  /** Detailed record for a specific call. Throws if the record does not exist. */
+  async getCallDetail(id: string): Promise<CallDetail> {
+    const raw = await fetchJson(`/api/calls/${encodeURIComponent(id)}`);
+    return toCallDetail(raw);
   }
 
-  /**
-   * Fetches detailed record for a specific call.
-   */
-  async getCallDetail(id: string): Promise<ApiResult<CallDetail>> {
-    try {
-      const res = await fetch(`/api/calls/${encodeURIComponent(id)}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const raw = await res.json();
-      this.sampleDataActive = false;
-
-      const hashChain: AuditVerifyResult = verifyHashChain(raw.auditLog || []);
-      const personaObj = raw.persona?.content ? parsePersonaYaml(raw.persona.content) : null;
-
-      const detail: CallDetail = {
-        id: raw.id,
-        source: raw.source || 'sim',
-        variant: raw.variant || 'v2_graph',
-        personaId: raw.personaId || 'cooperative',
-        auditLog: raw.auditLog || [],
-        handoff: raw.handoff || null,
-        runData: raw.runData || null,
-        persona: personaObj,
-        hashChain,
-      };
-
-      return { data: detail, isSampleData: false };
-    } catch {
-      // Fallback to sample call details
-      this.sampleDataActive = true;
-      const res = await fetch(`/sample-data/calls/${encodeURIComponent(id)}.json`);
-      if (!res.ok) {
-        throw new Error(`Call record '${id}' not found in sample data.`);
+  /** Evaluation summary tables and Pareto curve, parsed from result files. */
+  async getSummary(): Promise<{ variants: EvalVariantSummary[]; markdown: string; pareto: any }> {
+    const raw = await fetchJson('/api/results/summary');
+    const variants = parseSummaryCsv(raw.csv || '');
+    // Final-violation totals come from an honest server-side aggregation of
+    // per-run records (they are not columns in summary.csv).
+    const computed = raw.computedFinalViolations || {};
+    for (const v of variants) {
+      if (typeof computed[v.variant] === 'number') {
+        v.finalViolations = computed[v.variant];
       }
-      const raw = await res.json();
-      const hashChain = verifyHashChain(raw.auditLog || []);
-      const personaObj = raw.persona?.content ? parsePersonaYaml(raw.persona.content) : null;
-
-      const detail: CallDetail = {
-        id: raw.id,
-        source: raw.source || 'sim',
-        variant: raw.variant || 'v2_graph',
-        personaId: raw.personaId || 'cooperative',
-        auditLog: raw.auditLog || [],
-        handoff: raw.handoff || null,
-        runData: raw.runData || null,
-        persona: personaObj,
-        hashChain,
-      };
-
-      return { data: detail, isSampleData: true };
     }
+    return {
+      variants,
+      markdown: raw.markdown || '',
+      pareto: raw.pareto || null,
+    };
+  }
+
+  /** Persona definitions. */
+  async getPersonas(): Promise<PersonaDefinition[]> {
+    const rawList: Array<{ id: string; rawYaml: string }> = await fetchJson('/api/personas');
+    return rawList.map((item) => parsePersonaYaml(item.rawYaml));
+  }
+
+  /** Human labels from the label CSV. */
+  async getLabels(): Promise<HumanLabel[]> {
+    const raw = await fetchJson('/api/labels');
+    return parseLabelsCsv(raw.csv || '');
   }
 
   /**
-   * Fetches evaluation summary tables, markdown report, and Pareto curve.
+   * Appends a human label row. Returns success:false (never a fake
+   * success) when the write fails so no rating is silently lost.
    */
-  async getSummary(): Promise<ApiResult<{ variants: EvalVariantSummary[]; markdown: string; pareto: any }>> {
-    try {
-      const res = await fetch('/api/results/summary');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const raw = await res.json();
-      this.sampleDataActive = false;
-
-      const variants = parseSummaryCsv(raw.csv || '');
-      return {
-        data: {
-          variants,
-          markdown: raw.markdown || '',
-          pareto: raw.pareto || null,
-        },
-        isSampleData: false,
-      };
-    } catch {
-      this.sampleDataActive = true;
-      const res = await fetch('/sample-data/summary.json');
-      const raw = await res.json();
-      const variants = parseSummaryCsv(raw.csv || '');
-      return {
-        data: {
-          variants,
-          markdown: raw.markdown || '',
-          pareto: raw.pareto || null,
-        },
-        isSampleData: true,
-      };
-    }
-  }
-
-  /**
-   * Fetches persona definitions.
-   */
-  async getPersonas(): Promise<ApiResult<PersonaDefinition[]>> {
-    try {
-      const res = await fetch('/api/personas');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const rawList: Array<{ id: string; rawYaml: string }> = await res.json();
-      this.sampleDataActive = false;
-
-      const personas = rawList.map((item) => parsePersonaYaml(item.rawYaml));
-      return { data: personas, isSampleData: false };
-    } catch {
-      this.sampleDataActive = true;
-      const res = await fetch('/sample-data/personas.json');
-      const rawList: Array<{ id: string; rawYaml: string }> = await res.json();
-      const personas = rawList.map((item) => parsePersonaYaml(item.rawYaml));
-      return { data: personas, isSampleData: true };
-    }
-  }
-
-  /**
-   * Fetches human labels from CSV.
-   */
-  async getLabels(): Promise<ApiResult<HumanLabel[]>> {
-    try {
-      const res = await fetch('/api/labels');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const raw = await res.json();
-      this.sampleDataActive = false;
-      const labels = parseLabelsCsv(raw.csv || '');
-      return { data: labels, isSampleData: false };
-    } catch {
-      this.sampleDataActive = true;
-      const res = await fetch('/sample-data/labels.json');
-      const raw = await res.json();
-      const labels = parseLabelsCsv(raw.csv || '');
-      return { data: labels, isSampleData: true };
-    }
-  }
-
-  /**
-   * Appends a new human label row.
-   */
-  async saveLabel(label: HumanLabel): Promise<{ success: boolean; isSampleData: boolean; error?: string }> {
+  async saveLabel(label: HumanLabel): Promise<{ success: boolean; error?: string }> {
     try {
       const res = await fetch('/api/labels', {
         method: 'POST',
@@ -194,10 +109,9 @@ export class ApiClient {
         const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.error || `HTTP ${res.status}`);
       }
-      return { success: true, isSampleData: false };
+      return { success: true };
     } catch (err: any) {
-      console.warn('[ApiClient] Failed to save label to backend API, simulating local save:', err.message);
-      return { success: true, isSampleData: true };
+      return { success: false, error: err?.message || 'Label save failed and was not recorded.' };
     }
   }
 }

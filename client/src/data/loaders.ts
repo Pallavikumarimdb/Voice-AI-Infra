@@ -72,7 +72,45 @@ export function parseRunsJson(data: string | { summary?: any; runs?: any[] }): {
 }
 
 /**
+ * Splits one CSV line respecting double-quoted fields (which may contain commas).
+ */
+function splitCsvLine(line: string): string[] {
+  const cols: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      cols.push(cur.trim());
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  cols.push(cur.trim());
+  return cols;
+}
+
+/** Leading numeric value of a cell like "60.0% [46.2%, 72.4%]" or "1.0ms". */
+function leadingFloat(cell: string): number {
+  const m = cell.replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+  return m ? parseFloat(m[0]) : 0;
+}
+
+/**
  * Parses eval summary CSV into typed array of variant summary metrics.
+ * Maps ONLY columns that exist in the file:
+ *   variant, sample_size, final_hard_fail_pct, attempted_violations,
+ *   promise_rate_pct, judge_mean_score, latency_p50_ms, latency_p95_ms
+ * Columns the file does not have (final violations, cost) are left null
+ * and must be filled from runs data or rendered as "—", never guessed.
  */
 export function parseSummaryCsv(csvContent: string): EvalVariantSummary[] {
   if (!csvContent) return [];
@@ -84,19 +122,18 @@ export function parseSummaryCsv(csvContent: string): EvalVariantSummary[] {
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
-    const cols = line.split(',').map((c) => c.trim());
+    const cols = splitCsvLine(line);
 
     results.push({
       variant: cols[0] || '',
       totalCalls: parseInt(cols[1] || '0', 10),
-      hardFailFinalRate: parseFloat(cols[2] || '0'),
+      hardFailFinalRate: leadingFloat(cols[2] || '0'),
       attemptedViolations: parseInt(cols[3] || '0', 10),
-      finalViolations: parseInt(cols[4] || '0', 10),
-      promiseRate: parseFloat(cols[5] || '0'),
-      avgJudgeScore: parseFloat(cols[6] || '0'),
-      latencyP50: parseFloat(cols[7] || '0'),
-      latencyP95: parseFloat(cols[8] || '0'),
-      costPer1k: parseFloat(cols[9] || '0'),
+      finalViolations: null,
+      promiseRate: leadingFloat(cols[4] || '0'),
+      avgJudgeScore: leadingFloat(cols[5] || '0'),
+      latencyP50: leadingFloat(cols[6] || '0'),
+      latencyP95: leadingFloat(cols[7] || '0'),
     });
   }
 
