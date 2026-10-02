@@ -84,8 +84,9 @@ export class SessionManager {
       };
 
       this.ws.onclose = () => {
-        if (this.state === 'streaming') {
-          console.warn('[Client] Connection lost unexpectedly.');
+        if (this.state !== 'idle') {
+          console.warn('[Client] Gateway connection closed.');
+          this.callbacks.onError('Voice connection disconnected. Please click Start Call to reconnect.');
           this.stop();
         }
       };
@@ -130,7 +131,13 @@ export class SessionManager {
       }
     };
 
+    // Chromium requires an active path to destination to keep pulling AudioWorklet frames
+    const muteNode = this.audioContext.createGain();
+    muteNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+
     source.connect(this.workletNode);
+    this.workletNode.connect(muteNode);
+    muteNode.connect(this.audioContext.destination);
   }
 
   private playPcm16Chunk(base64: string): void {

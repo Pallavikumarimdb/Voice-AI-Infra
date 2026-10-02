@@ -16,6 +16,7 @@ export interface Session {
   lastActivityAt: number;
   isStarted: boolean;
   isAgentSpeaking: boolean;
+  agentSpeakingStartedAt?: number;
   currentSpeakingUttId?: number;
   currentTTSAbort?: AbortController;
   config?: Record<string, any>;

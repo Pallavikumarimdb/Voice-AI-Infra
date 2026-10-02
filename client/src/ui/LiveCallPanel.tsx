@@ -200,6 +200,13 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
       },
       onError: (err) => setError(err),
       onMessage: (msg: GatewayMessage) => {
+        if (msg.type === 'error') {
+          console.error('[LiveCallPanel] Gateway error:', msg);
+          setError(msg.message || msg.code || 'Voice pipeline service error');
+          sessionManagerRef.current?.stop();
+          setIsAgentSpeaking(false);
+          return;
+        }
         if (msg.type === 'hud') {
           setHudData({
             queueDepth: msg.queueDepth,

@@ -101,10 +101,11 @@ async def websocket_stream(websocket: WebSocket):
                 # 3. If speech segment was finalized by VAD silence hangover / max length:
                 if finalized_segment is not None and len(finalized_segment) > 1600: # at least 100ms
                     with ASR_DURATION.labels(model=asr_wrapper.model_size, chunk_ms="final").time():
-                        asr_result = asr_wrapper.transcribe(
+                        asr_result = await asyncio.to_thread(
+                            asr_wrapper.transcribe,
                             finalized_segment,
-                            language=session.src_lang,
-                            word_timestamps=True
+                            session.src_lang,
+                            True
                         )
 
                     final_text = asr_result["text"]
@@ -138,10 +139,11 @@ async def websocket_stream(websocket: WebSocket):
                         session.last_asr_run_time_ms = now_ms
 
                         with ASR_DURATION.labels(model=asr_wrapper.model_size, chunk_ms=str(min_chunk_ms)).time():
-                            asr_result = asr_wrapper.transcribe(
+                            asr_result = await asyncio.to_thread(
+                                asr_wrapper.transcribe,
                                 session.active_audio,
-                                language=session.src_lang,
-                                word_timestamps=True
+                                session.src_lang,
+                                True
                             )
 
                         hypo = asr_result["text"]

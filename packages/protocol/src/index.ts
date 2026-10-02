@@ -192,8 +192,10 @@ export function packAudioFrame(pcm16: Int16Array, seq: number, tCapture: number)
   view.setUint32(1, seq, true);
   view.setFloat64(5, tCapture, true);
 
-  const pcmView = new Int16Array(buffer, 13, pcm16.length);
-  pcmView.set(pcm16);
+  // Copy Int16 PCM samples via Uint8 view to prevent "start offset of Int16Array should be a multiple of 2" RangeError
+  const uint8Src = new Uint8Array(pcm16.buffer, pcm16.byteOffset, pcm16.byteLength);
+  const uint8Dst = new Uint8Array(buffer, 13, pcm16.byteLength);
+  uint8Dst.set(uint8Src);
 
   return buffer;
 }
@@ -207,25 +209,29 @@ export function unpackAudioFrame(buffer: ArrayBuffer | Buffer): {
   tCapture: number;
   pcm16: Int16Array;
 } {
-  let view: DataView;
-  let pcmOffset = 13;
+  const pcmOffset = 13;
 
   if (typeof Buffer !== 'undefined' && Buffer.isBuffer(buffer)) {
     const msgType = buffer.readUInt8(0);
     const seq = buffer.readUInt32LE(1);
     const tCapture = buffer.readDoubleLE(5);
-    const pcm16 = new Int16Array(
-      buffer.buffer,
-      buffer.byteOffset + pcmOffset,
-      (buffer.length - pcmOffset) / 2
-    );
+    const numSamples = Math.floor((buffer.length - pcmOffset) / 2);
+    const pcm16 = new Int16Array(numSamples);
+    const dst = new Uint8Array(pcm16.buffer);
+    const src = new Uint8Array(buffer.buffer, buffer.byteOffset + pcmOffset, numSamples * 2);
+    dst.set(src);
     return { msgType, seq, tCapture, pcm16 };
   } else {
-    view = new DataView(buffer as ArrayBuffer);
+    const arrBuf = buffer as ArrayBuffer;
+    const view = new DataView(arrBuf);
     const msgType = view.getUint8(0);
     const seq = view.getUint32(1, true);
     const tCapture = view.getFloat64(5, true);
-    const pcm16 = new Int16Array(buffer as ArrayBuffer, pcmOffset);
+    const numSamples = Math.floor((arrBuf.byteLength - pcmOffset) / 2);
+    const pcm16 = new Int16Array(numSamples);
+    const dst = new Uint8Array(pcm16.buffer);
+    const src = new Uint8Array(arrBuf, pcmOffset, numSamples * 2);
+    dst.set(src);
     return { msgType, seq, tCapture, pcm16 };
   }
 }

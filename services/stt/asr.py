@@ -27,11 +27,17 @@ class ASRModelWrapper:
             # If CUDA requested but unavailable, fall back to CPU
             actual_device = self.device
             actual_compute = self.compute_type
+            actual_model = self.model_size
             if actual_device == "cuda" and not torch.cuda.is_available():
                 print("[ASR] CUDA not available on host. Falling back to CPU with int8.")
                 actual_device = "cpu"
                 actual_compute = "int8"
+                # If running on CPU and model was the heavy large-v3-turbo default, switch to fast 'base' model
+                if "STT_MODEL_SIZE" not in os.environ and actual_model == "large-v3-turbo":
+                    actual_model = "base"
+                    print(f"[ASR] CPU detected: automatically switching to fast '{actual_model}' model for real-time latency.")
 
+            self.model_size = actual_model
             print(f"[ASR] Loading faster-whisper model '{self.model_size}' on {actual_device} ({actual_compute})...")
             self.model = WhisperModel(
                 self.model_size,

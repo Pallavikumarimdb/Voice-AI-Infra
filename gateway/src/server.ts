@@ -110,16 +110,20 @@ wss.on('connection', (clientWs: WebSocket) => {
           }
 
           // Barge-in check: If caller starts speaking while agent is speaking audio, interrupt
+          // Require at least 450ms of agent speech elapsed to avoid false cutoff from trailing echo
           if (session.mode === 'agent' && session.isAgentSpeaking) {
-            console.log(`[Gateway] Barge-in detected during utterance ${session.currentSpeakingUttId}`);
-            session.currentTTSAbort?.abort();
-            session.isAgentSpeaking = false;
-            sendJson(clientWs, {
-              type: 'interrupt',
-              uttId: session.currentSpeakingUttId,
-              tInterrupt: now,
-              reason: 'caller_barge_in'
-            });
+            const speakElapsed = now - (session.agentSpeakingStartedAt || 0);
+            if (speakElapsed > 450) {
+              console.log(`[Gateway] Barge-in detected during utterance ${session.currentSpeakingUttId}`);
+              session.currentTTSAbort?.abort();
+              session.isAgentSpeaking = false;
+              sendJson(clientWs, {
+                type: 'interrupt',
+                uttId: session.currentSpeakingUttId,
+                tInterrupt: now,
+                reason: 'caller_barge_in'
+              });
+            }
           }
 
           sendJson(clientWs, { ...sttMsg, tEmit: now });
@@ -189,6 +193,7 @@ wss.on('connection', (clientWs: WebSocket) => {
 
                 // Stream agent audio back to client via TTS
                 session.isAgentSpeaking = true;
+                session.agentSpeakingStartedAt = Date.now();
                 session.currentSpeakingUttId = currentUttId;
                 session.currentTTSAbort = new AbortController();
 
@@ -288,20 +293,28 @@ wss.on('connection', (clientWs: WebSocket) => {
     );
   };
 
-  clientWs.on('message', (data: Buffer | string, isBinary: boolean) => {
+  clientWs.on('message', (data: Buffer | ArrayBuffer | Buffer[] | string, isBinary: boolean) => {
     session.lastActivityAt = Date.now();
 
-    if (isBinary && Buffer.isBuffer(data)) {
+    const buf = Buffer.isBuffer(data)
+      ? data
+      : data instanceof ArrayBuffer
+      ? Buffer.from(data)
+      : Array.isArray(data)
+      ? Buffer.concat(data)
+      : null;
+
+    if (isBinary && buf) {
       // Protocol header check: Offset 0 = msgType (0x01 = audio)
-      if (data.length < 13) return;
-      const msgType = data.readUInt8(0);
+      if (buf.length < 13) return;
+      const msgType = buf.readUInt8(0);
       if (msgType === 0x01) {
         if (!session.isStarted) {
           // Client sent audio before start control message - drop safely
           return;
         }
         // Forward through backpressure policy
-        forwardAudioFrame(session, data);
+        forwardAudioFrame(session, buf);
       }
     } else {
       // Control JSON message

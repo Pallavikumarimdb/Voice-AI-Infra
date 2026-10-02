@@ -47,6 +47,14 @@ def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
     except Exception:
         return False
 
+def wait_for_port(port: int, timeout: float = 60.0, host: str = "127.0.0.1") -> bool:
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if is_port_in_use(port, host):
+            return True
+        time.sleep(0.5)
+    return False
+
 def get_npm_cmd() -> str:
     return "npm.cmd" if IS_WINDOWS else "npm"
 
@@ -62,6 +70,7 @@ class ProcessManager:
         prefix = f"{color}[{name:<8}]{reset} "
 
         merged_env = os.environ.copy()
+        merged_env["PYTHONUNBUFFERED"] = "1"
         # Ensure service folder is in PYTHONPATH for local module resolution
         if "PYTHONPATH" in merged_env:
             merged_env["PYTHONPATH"] = f"{cwd}{os.pathsep}{ROOT_DIR}{os.pathsep}{merged_env['PYTHONPATH']}"
@@ -193,6 +202,16 @@ def main():
                 [py_bin, "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"],
                 cwd=os.path.join(ROOT_DIR, "services", "mt"),
             )
+
+    # Wait for STT and Agent backend services to be ready
+    if mode in ("agent", "translator", "all"):
+        if not is_port_in_use(8001):
+            sys.stdout.write("⏳ Waiting for STT Whisper model to initialize...")
+            sys.stdout.flush()
+            if wait_for_port(8001, timeout=90.0):
+                print(f" {COLORS['BOLD']}✓ STT Ready!{COLORS['RESET']}")
+            else:
+                print(f" {COLORS['WARN']}⚠ STT wait timed out; starting Gateway anyway.{COLORS['RESET']}")
 
     # 5. Gateway (port 8443)
     if is_port_in_use(8443):
