@@ -125,6 +125,12 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
   const sessionManagerRef = useRef<SessionManager | null>(null);
   const currentSessionIdRef = useRef<string | null>(null);
   const captureTimestampsRef = useRef<Map<number, number>>(new Map());
+  // Latency inputs mirrored into refs: the session effect below must mount
+  // exactly once per component lifetime. Reading state directly there (via
+  // effect deps) re-created the SessionManager on the first transcription
+  // and silently killed the live call (mic + socket torn down mid-turn).
+  const asrCommitMsRef = useRef<number | undefined>(undefined);
+  const agentTurnLatencyMsRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -200,7 +206,9 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
           });
         } else if (msg.type === 'final') {
           if (msg.tCapture && msg.tFinal) {
-            setAsrCommitMs(msg.tFinal - msg.tCapture);
+            const commitMs = msg.tFinal - msg.tCapture;
+            setAsrCommitMs(commitMs);
+            asrCommitMsRef.current = commitMs;
             captureTimestampsRef.current.set(msg.uttId, msg.tCapture);
           }
           setEntries((prev) => {
@@ -210,7 +218,10 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
           });
         } else if (msg.type === 'agent_text') {
           currentSessionIdRef.current = msg.sessionId;
-          if (msg.metrics?.llmMs) setAgentTurnLatencyMs(msg.metrics.llmMs);
+          if (msg.metrics?.llmMs) {
+            setAgentTurnLatencyMs(msg.metrics.llmMs);
+            agentTurnLatencyMsRef.current = msg.metrics.llmMs;
+          }
           if (msg.events) {
             for (const ev of msg.events) {
               const timeStr = new Date().toLocaleTimeString();
@@ -240,7 +251,9 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
           if (tCapture) {
             const totalMs = Math.round(Date.now() - tCapture);
             setTotalRoundTripMs(totalMs);
-            if (asrCommitMs && agentTurnLatencyMs) setTtsFirstAudioMs(Math.max(0, totalMs - asrCommitMs - agentTurnLatencyMs));
+            const asrMs = asrCommitMsRef.current;
+            const llmMs = agentTurnLatencyMsRef.current;
+            if (asrMs && llmMs) setTtsFirstAudioMs(Math.max(0, totalMs - asrMs - llmMs));
           }
         } else if (msg.type === 'agent_speech_end') {
           setIsAgentSpeaking(false);
@@ -260,8 +273,10 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
       },
     });
     return () => { sessionManagerRef.current?.stop(); };
+    // Mount-once: SessionManager owns the mic + socket for the component's
+    // lifetime. Never add message-derived state to these deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asrCommitMs, agentTurnLatencyMs]);
+  }, []);
 
   const handleToggle = () => {
     if (state === 'idle') {
@@ -436,7 +451,7 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
             {entries.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text-tertiary)' }}>
                 <div style={{ fontWeight: 650, color: 'var(--text)', marginBottom: 4 }}>Ready to start</div>
-                <div style={{ fontSize: 13 }}>Press “{currentPreset.actionText}” and speak. Try: “Yes, this is Alex — my date of birth is April 15, 1988.”</div>
+                <div style={{ fontSize: 13 }}>Press “{currentPreset.actionText}” — the agent greets you first. When it's your turn, try: “Yes, this is Alex — my date of birth is April 15, 1988.”</div>
               </div>
             ) : (
               <Captions entries={entries} />

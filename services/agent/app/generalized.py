@@ -185,7 +185,9 @@ class GeneralizedVoiceAgent:
         )
 
         handler = self._handlers.get(domain, self._handle_custom)
+        t_start = time.perf_counter()
         reply_text, turn_events = handler(ctx)
+        handler_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
         events.extend(turn_events)
 
         if audit_logger:
@@ -202,11 +204,14 @@ class GeneralizedVoiceAgent:
             "events": events,
             "state": state,
             "metrics": {
-                "llmMs": 35.0,
-                "ttftMs": 12.0,
-                "tokensIn": len(user_text) + 80,
-                "tokensOut": len(reply_text),
-                "model": f"{domain}_{language}_v1",
+                # Template engine: no LLM call happens on this path. Report the
+                # honestly measured handler time and zero tokens — never fake
+                # LLM timings.
+                "llmMs": handler_ms,
+                "ttftMs": handler_ms,
+                "tokensIn": 0,
+                "tokensOut": 0,
+                "model": f"template_{domain}_{language}",
             }
         }
 

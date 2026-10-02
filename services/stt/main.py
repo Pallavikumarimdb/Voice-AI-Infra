@@ -230,10 +230,16 @@ async def websocket_stream(websocket: WebSocket):
 
                         print(f"[STT] Started session {session.session_id} (srcLang: {session.src_lang}, sampleRate: {session.sample_rate})")
                     elif msg_type == "session_stop":
-                        # Flush any remaining audio
+                        # Flush any remaining audio without blocking the loop.
                         leftover = session.segmenter.force_finalize()
-                        if leftover is not None and len(leftover) > 1600:
-                            asr_result = asr_wrapper.transcribe(leftover, language=session.src_lang)
+                        if leftover is not None and len(leftover) > 1600 and not session.asr_busy:
+                            session.asr_busy = True
+                            try:
+                                asr_result = await asyncio.to_thread(
+                                    asr_wrapper.transcribe, leftover, session.src_lang, True
+                                )
+                            finally:
+                                session.asr_busy = False
                             if asr_result["text"]:
                                 await websocket.send_text(json.dumps({
                                     "type": "final",

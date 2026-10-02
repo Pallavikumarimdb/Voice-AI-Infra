@@ -74,6 +74,10 @@ class ASRModelWrapper:
             full_text = []
             words_list = []
             for seg in segments:
+                # Whisper invents phrases on noise/silence. Segments the model
+                # itself flags as non-speech are dropped rather than shown.
+                if getattr(seg, 'no_speech_prob', 0.0) > 0.75:
+                    continue
                 full_text.append(seg.text)
                 if seg.words:
                     for w in seg.words:

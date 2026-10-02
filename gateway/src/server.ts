@@ -120,10 +120,14 @@ wss.on('connection', (clientWs: WebSocket) => {
           }
 
           // Barge-in check: If caller starts speaking while agent is speaking audio, interrupt
-          // Require at least 450ms of agent speech elapsed to avoid false cutoff from trailing echo
+          // Require at least 450ms of agent speech elapsed to avoid false cutoff from trailing echo.
+          // Also require the partial to be fresh: with slow STT hosts, delayed
+          // partials of pre-agent speech arrive mid-playback and must not cut it.
           if (session.mode === 'agent' && session.isAgentSpeaking) {
             const speakElapsed = now - (session.agentSpeakingStartedAt || 0);
-            if (speakElapsed > 450) {
+            const partialFresh =
+              !sttMsg.tCapture || sttMsg.tCapture >= (session.agentSpeakingStartedAt || 0) - 1000;
+            if (partialFresh && speakElapsed > 450) {
               console.log(`[Gateway] Barge-in detected during utterance ${session.currentSpeakingUttId}`);
               session.currentTTSAbort?.abort();
               session.isAgentSpeaking = false;
@@ -400,7 +404,81 @@ wss.on('connection', (clientWs: WebSocket) => {
           }
           session.isStarted = true;
           connectSTT();
+          console.log(`[Gateway] Session started: ${sessionId} (mode: ${session.mode}, srcLang: ${session.srcLang})`);
           sendJson(clientWs, { type: 'started', sessionId, mode: session.mode, config: session.config });
+
+          // Agent speaks first: turn 1 is always the agent's introduction.
+          // Previously the call opened in silence and waited for the caller,
+          // so live calls felt dead until the user guessed what to say.
+          if (session.mode === 'agent') {
+            const cfgLang = session.config?.language;
+            const ttsLang: 'ja' | 'en' =
+              cfgLang === 'en' ? 'en' : cfgLang === 'ja' ? 'ja' : session.srcLang === 'en' ? 'en' : 'ja';
+            const configured = typeof session.config?.greeting === 'string' ? session.config.greeting.trim() : '';
+            const greeting =
+              configured ||
+              (ttsLang === 'en'
+                ? 'Hello! Thank you for calling. I am your AI assistant. How may I help you today?'
+                : 'お電話ありがとうございます。AIアシスタントでございます。どのようなご用件でしょうか。');
+
+            const greetUttId = 0;
+            session.contextWindow.push(`Agent: ${greeting}`);
+            sendJson(clientWs, {
+              type: 'agent_text',
+              sessionId: session.id,
+              uttId: greetUttId,
+              text: greeting,
+              events: [],
+              tEmit: Date.now(),
+            });
+
+            session.isAgentSpeaking = true;
+            session.agentSpeakingStartedAt = Date.now();
+            session.currentSpeakingUttId = greetUttId;
+            session.currentTTSAbort = new AbortController();
+
+            sendJson(clientWs, {
+              type: 'agent_speech_start',
+              uttId: greetUttId,
+              tStart: Date.now(),
+            });
+
+            ttsClient
+              .streamSynthesize(
+                greeting,
+                (chunkSeq, chunkBuf) => {
+                  if (session.isAgentSpeaking) {
+                    sendJson(clientWs, {
+                      type: 'agent_audio_chunk',
+                      uttId: greetUttId,
+                      seq: chunkSeq,
+                      pcm16Base64: chunkBuf.toString('base64'),
+                      tEmit: Date.now(),
+                    });
+                  }
+                },
+                {
+                  abortSignal: session.currentTTSAbort.signal,
+                  language: ttsLang,
+                }
+              )
+              .then(() => {
+                if (session.isAgentSpeaking) {
+                  sendJson(clientWs, {
+                    type: 'agent_speech_end',
+                    uttId: greetUttId,
+                    tEnd: Date.now(),
+                  });
+                  session.isAgentSpeaking = false;
+                }
+              })
+              .catch((ttsErr) => {
+                if (ttsErr.name !== 'AbortError') {
+                  console.error(`[Gateway] Greeting TTS error for ${sessionId}:`, ttsErr.message);
+                }
+                session.isAgentSpeaking = false;
+              });
+          }
         } else if (msg.type === 'stop') {
           session.isStarted = false;
           clearSttReconnectTimer();

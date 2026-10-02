@@ -178,25 +178,36 @@ export const CallInspector: React.FC<CallInspectorProps> = ({ call, onBack }) =>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {(call.handoff || call.runData) ? (
           <div className="card">
             <div className="card-header"><h3 className="card-title">Handoff summary</h3></div>
             <div className="card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-tertiary)' }}>Identity</span>
-                <strong>{call.runData?.hard_fail?.passed ? 'Verified' : 'Unverified'}</strong>
+                <strong>{call.runData?.hard_fail?.passed ? 'Verified' : call.handoff ? (call.handoff.identity_verified ? 'Verified' : 'Unverified') : 'Unverified'}</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-tertiary)' }}>Target</span>
-                <span className="mono">{call.persona?.debtor_profile?.full_name || call.personaId}</span>
+                <span className="mono">{call.handoff?.debtor_name || call.persona?.debtor_profile?.full_name || call.personaId}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-tertiary)' }}>Next action</span>
                 <span style={{ textAlign: 'right', maxWidth: '60%' }}>
-                  {call.runData?.promise_to_pay ? 'Monitor payment schedule' : 'Follow up in calling hours'}
+                  {call.handoff?.recommended_next_action || (call.runData?.promise_to_pay ? 'Monitor payment schedule' : 'Follow up in calling hours')}
                 </span>
               </div>
             </div>
           </div>
+          ) : (
+          <div className="card">
+            <div className="card-header"><h3 className="card-title">Handoff summary</h3><Badge tone="neutral">None recorded</Badge></div>
+            <div className="card-pad" style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+              Live calls only get a handoff when the session is ended via the agent
+              <span className="mono"> /session/end </span>
+              endpoint, which the gateway does not call yet.
+            </div>
+          </div>
+          )}
 
           {call.runData?.judge && (
             <div className="card">

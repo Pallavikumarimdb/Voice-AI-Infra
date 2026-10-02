@@ -64,11 +64,18 @@ class Segmenter:
             if self.state == State.SPEECH:
                 self.silence_run_ms += frame_ms
 
-        # Finalization trigger: hangover exceeded or forced cut on max length
+        # Finalization trigger: hangover exceeded or forced cut on max length.
+        # Return ONLY the speech segment (from segment start, which already
+        # backs off by preroll_ms) — never the whole ring buffer. Returning
+        # stale pre-speech silence makes every transcription slower and makes
+        # Whisper hallucinate on dead air, snowballing on CPU hosts.
         if self.state == State.SPEECH:
             duration_ms = t_ms - self.segment_start_ms
             if self.silence_run_ms >= self.hangover_ms or duration_ms >= self.max_len_ms:
-                segment = self.buffer.get_all().copy()
+                keep_ms = duration_ms + frame_ms
+                keep_samples = int(keep_ms * self.sample_rate / 1000)
+                full = self.buffer.get_all()
+                segment = full[-keep_samples:].copy() if keep_samples < len(full) else full.copy()
                 self.buffer.clear()
                 self.state = State.IDLE
                 self.silence_run_ms = 0

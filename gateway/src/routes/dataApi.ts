@@ -176,6 +176,10 @@ export async function handleDataApi(
         }
       }
 
+      // Newest first: live calls under test surface on page 1 instead of
+      // being buried behind hundreds of historical sim rows.
+      calls.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
       sendJson(res, 200, calls);
       return true;
     } catch (err: any) {
