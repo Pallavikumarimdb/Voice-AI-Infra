@@ -138,6 +138,11 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
   const [targetContext, setTargetContext] = useState(DOMAIN_PRESETS.ja.collections.contextDesc);
   const [targetSubject, setTargetSubject] = useState(DOMAIN_PRESETS.ja.collections.targetLabel);
   const [activeGuardrails, setActiveGuardrails] = useState<string[]>(DOMAIN_PRESETS.ja.collections.guardrails);
+  const [configTab, setConfigTab] = useState<'prompt' | 'context' | 'guardrails'>('prompt');
+  const [callSeconds, setCallSeconds] = useState(0);
+
+  // Auto-scroll ref for captions container
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
   // Domain-specific state indicators
   const [callPhase, setCallPhase] = useState('greet');
@@ -160,6 +165,35 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
   const sessionManagerRef = useRef<SessionManager | null>(null);
   const currentSessionIdRef = useRef<string | null>(null);
   const captureTimestampsRef = useRef<Map<number, number>>(new Map());
+
+  // Call duration timer
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    if (state === 'streaming') {
+      setCallSeconds(0);
+      interval = setInterval(() => {
+        setCallSeconds((s) => s + 1);
+      }, 1000);
+    } else {
+      if (interval) clearInterval(interval);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [state]);
+
+  // Auto-scroll chat on new captions
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [entries]);
+
+  const formatDuration = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
 
   // Handle switching preset
   const handleSelectDomain = (domain: DomainType) => {
@@ -370,535 +404,939 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
   const currentPreset = DOMAIN_PRESETS[agentLanguage][activeDomain];
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+    <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
-      {/* Agent Studio & Domain Configurator Card */}
+      {/* Top Bar: Domain Persona Pills + Language Switcher + Studio Drawer Toggle */}
       <div
+        className="glass-panel"
         style={{
-          background: '#161b22',
-          border: '1px solid #30363d',
-          borderRadius: '8px',
-          marginBottom: '20px',
-          overflow: 'hidden',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px 18px',
+          gap: '12px',
         }}
       >
-        <div
-          style={{
-            padding: '12px 20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            background: 'rgba(31, 111, 235, 0.08)',
-            borderBottom: isConfigOpen ? '1px solid #30363d' : 'none',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#f0f6fc' }}>
-              ⚙️ Agent Studio: Domain & Instructions Configurator
-            </span>
-            <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '12px', background: '#21262d', color: '#58a6ff', border: '1px solid #30363d' }}>
-              Active: {currentPreset.badge}
-            </span>
+        {/* Left: Domain Presets */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-tertiary)', marginRight: '4px' }}>
+            Domain
+          </span>
+          {(Object.keys(DOMAIN_PRESETS[agentLanguage]) as DomainType[]).map((dKey) => {
+            const preset = DOMAIN_PRESETS[agentLanguage][dKey];
+            const isSelected = activeDomain === dKey;
+            return (
+              <button
+                key={dKey}
+                onClick={() => handleSelectDomain(dKey)}
+                disabled={state !== 'idle'}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  border: isSelected ? '1px solid rgba(99, 102, 241, 0.45)' : '1px solid var(--border-subtle)',
+                  background: isSelected ? 'rgba(99, 102, 241, 0.18)' : 'rgba(255, 255, 255, 0.03)',
+                  color: isSelected ? '#ffffff' : 'var(--text-secondary)',
+                  cursor: state === 'idle' ? 'pointer' : 'not-allowed',
+                  fontSize: '0.82rem',
+                  fontWeight: isSelected ? 600 : 500,
+                  boxShadow: isSelected ? '0 2px 10px rgba(99, 102, 241, 0.2)' : 'none',
+                }}
+              >
+                <span>{preset.badge}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Right: Language switch & Persona Studio drawer button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Language Switch */}
+          <div
+            style={{
+              display: 'inline-flex',
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '8px',
+              padding: '2px',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => handleSelectLanguage('ja')}
+              disabled={state !== 'idle'}
+              style={{
+                padding: '4px 10px',
+                borderRadius: '6px',
+                border: 'none',
+                background: agentLanguage === 'ja' ? 'rgba(99, 102, 241, 0.3)' : 'transparent',
+                color: agentLanguage === 'ja' ? '#ffffff' : 'var(--text-secondary)',
+                fontWeight: agentLanguage === 'ja' ? 600 : 500,
+                cursor: state === 'idle' ? 'pointer' : 'not-allowed',
+                fontSize: '0.78rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <span>🇯🇵</span>
+              <span>JA</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectLanguage('en')}
+              disabled={state !== 'idle'}
+              style={{
+                padding: '4px 10px',
+                borderRadius: '6px',
+                border: 'none',
+                background: agentLanguage === 'en' ? 'rgba(99, 102, 241, 0.3)' : 'transparent',
+                color: agentLanguage === 'en' ? '#ffffff' : 'var(--text-secondary)',
+                fontWeight: agentLanguage === 'en' ? 600 : 500,
+                cursor: state === 'idle' ? 'pointer' : 'not-allowed',
+                fontSize: '0.78rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <span>🇺🇸</span>
+              <span>EN</span>
+            </button>
           </div>
 
+          {/* Drawer Trigger */}
           <button
             onClick={() => setIsConfigOpen(!isConfigOpen)}
             style={{
-              background: 'transparent',
-              border: '1px solid #30363d',
-              color: '#c9d1d9',
-              padding: '4px 12px',
-              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: isConfigOpen ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+              border: isConfigOpen ? '1px solid rgba(99, 102, 241, 0.4)' : '1px solid var(--border-subtle)',
+              color: isConfigOpen ? '#ffffff' : 'var(--text-secondary)',
+              padding: '6px 12px',
+              borderRadius: '8px',
               cursor: 'pointer',
               fontSize: '0.8rem',
               fontWeight: 500,
             }}
           >
-            {isConfigOpen ? 'Hide Studio Configuration ▲' : 'Customize Instructions & Rules ▼'}
+            <span>⚙️</span>
+            <span>Agent Parameters</span>
+            <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>{isConfigOpen ? '▲' : '▼'}</span>
           </button>
         </div>
+      </div>
 
-        {/* Domain Presets & Voice Language Bar */}
-        <div style={{ padding: '12px 20px', display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', justifyContent: 'space-between', borderBottom: isConfigOpen ? '1px solid #21262d' : 'none' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.8rem', color: '#8b949e', marginRight: '6px' }}>Domain Preset:</span>
-            {(Object.keys(DOMAIN_PRESETS[agentLanguage]) as DomainType[]).map((dKey) => {
-              const preset = DOMAIN_PRESETS[agentLanguage][dKey];
-              const isSelected = activeDomain === dKey;
-              return (
-                <button
-                  key={dKey}
-                  onClick={() => handleSelectDomain(dKey)}
+      {/* Expandable Studio Drawer */}
+      {isConfigOpen && (
+        <div
+          className="glass-panel"
+          style={{
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-in-out',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+          }}
+        >
+          {/* Drawer Tabs */}
+          <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '12px' }}>
+            <button
+              onClick={() => setConfigTab('prompt')}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '6px',
+                border: 'none',
+                background: configTab === 'prompt' ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
+                color: configTab === 'prompt' ? '#fff' : 'var(--text-secondary)',
+                fontSize: '0.82rem',
+                fontWeight: configTab === 'prompt' ? 600 : 500,
+                cursor: 'pointer',
+              }}
+            >
+              Prompt & Initial Greeting
+            </button>
+            <button
+              onClick={() => setConfigTab('context')}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '6px',
+                border: 'none',
+                background: configTab === 'context' ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
+                color: configTab === 'context' ? '#fff' : 'var(--text-secondary)',
+                fontSize: '0.82rem',
+                fontWeight: configTab === 'context' ? 600 : 500,
+                cursor: 'pointer',
+              }}
+            >
+              Target Contact & Scenario
+            </button>
+            <button
+              onClick={() => setConfigTab('guardrails')}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '6px',
+                border: 'none',
+                background: configTab === 'guardrails' ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
+                color: configTab === 'guardrails' ? '#fff' : 'var(--text-secondary)',
+                fontSize: '0.82rem',
+                fontWeight: configTab === 'guardrails' ? 600 : 500,
+                cursor: 'pointer',
+              }}
+            >
+              Guardrails & Safety ({activeGuardrails.length})
+            </button>
+          </div>
+
+          {/* Drawer Content */}
+          {configTab === 'prompt' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  Opening Utterance / First Greeting:
+                </label>
+                <input
+                  type="text"
+                  value={customGreeting}
+                  onChange={(e) => setCustomGreeting(e.target.value)}
                   disabled={state !== 'idle'}
                   style={{
-                    padding: '6px 14px',
-                    borderRadius: '6px',
-                    border: isSelected ? '1px solid #1f6feb' : '1px solid #30363d',
-                    background: isSelected ? 'rgba(31, 111, 235, 0.15)' : '#21262d',
-                    color: isSelected ? '#58a6ff' : '#c9d1d9',
-                    cursor: state === 'idle' ? 'pointer' : 'not-allowed',
+                    width: '100%',
+                    background: 'rgba(0, 0, 0, 0.3)',
+                    border: '1px solid var(--border-medium)',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    padding: '9px 14px',
                     fontSize: '0.85rem',
-                    fontWeight: isSelected ? 600 : 400,
+                    fontFamily: 'inherit',
                   }}
-                >
-                  {preset.badge}
-                </button>
-              );
-            })}
-          </div>
+                />
+              </div>
 
-          {/* Voice Language Selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '0.8rem', color: '#8b949e' }}>Voice Language:</span>
-            <div style={{ display: 'inline-flex', background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px', padding: '2px' }}>
-              <button
-                type="button"
-                onClick={() => handleSelectLanguage('ja')}
-                disabled={state !== 'idle'}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '4px',
-                  border: 'none',
-                  background: agentLanguage === 'ja' ? '#1f6feb' : 'transparent',
-                  color: agentLanguage === 'ja' ? '#ffffff' : '#8b949e',
-                  fontWeight: agentLanguage === 'ja' ? 600 : 400,
-                  cursor: state === 'idle' ? 'pointer' : 'not-allowed',
-                  fontSize: '0.8rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
-              >
-                <span>🇯🇵</span>
-                <span>日本語</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSelectLanguage('en')}
-                disabled={state !== 'idle'}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '4px',
-                  border: 'none',
-                  background: agentLanguage === 'en' ? '#238636' : 'transparent',
-                  color: agentLanguage === 'en' ? '#ffffff' : '#8b949e',
-                  fontWeight: agentLanguage === 'en' ? 600 : 400,
-                  cursor: state === 'idle' ? 'pointer' : 'not-allowed',
-                  fontSize: '0.8rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
-              >
-                <span>🇺🇸</span>
-                <span>English</span>
-              </button>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  System Instructions & Persona Guidance:
+                </label>
+                <textarea
+                  value={customInstructions}
+                  onChange={(e) => setCustomInstructions(e.target.value)}
+                  disabled={state !== 'idle'}
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    background: 'rgba(0, 0, 0, 0.3)',
+                    border: '1px solid var(--border-medium)',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    padding: '10px 14px',
+                    fontSize: '0.85rem',
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                    lineHeight: '1.5',
+                  }}
+                />
+              </div>
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Expandable Configuration Body */}
-        {isConfigOpen && (
-          <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#c9d1d9', marginBottom: '6px' }}>
-                System Instructions & Domain Guidance:
-              </label>
-              <textarea
-                value={customInstructions}
-                onChange={(e) => setCustomInstructions(e.target.value)}
-                disabled={state !== 'idle'}
-                rows={4}
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  background: '#0d1117',
-                  border: '1px solid #30363d',
-                  borderRadius: '6px',
-                  color: '#f0f6fc',
-                  padding: '8px 12px',
-                  fontSize: '0.85rem',
-                  fontFamily: 'inherit',
-                  resize: 'vertical',
-                }}
-              />
-
-              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#c9d1d9', marginTop: '12px', marginBottom: '6px' }}>
-                Opening Utterance / Initial Greeting:
-              </label>
-              <input
-                type="text"
-                value={customGreeting}
-                onChange={(e) => setCustomGreeting(e.target.value)}
-                disabled={state !== 'idle'}
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  background: '#0d1117',
-                  border: '1px solid #30363d',
-                  borderRadius: '6px',
-                  color: '#f0f6fc',
-                  padding: '8px 12px',
-                  fontSize: '0.85rem',
-                }}
-              />
-            </div>
-
-            <div>
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#c9d1d9', marginBottom: '6px' }}>
-                  Target Contact & Scenario Context:
+          {configTab === 'context' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  Target Contact Name:
                 </label>
                 <input
                   type="text"
                   value={targetSubject}
                   onChange={(e) => setTargetSubject(e.target.value)}
                   disabled={state !== 'idle'}
-                  placeholder="Target Name / Person"
+                  placeholder="e.g. Alex Johnson / 山田 太郎"
                   style={{
                     width: '100%',
-                    boxSizing: 'border-box',
-                    background: '#0d1117',
-                    border: '1px solid #30363d',
-                    borderRadius: '6px',
-                    color: '#f0f6fc',
-                    padding: '6px 12px',
-                    fontSize: '0.85rem',
-                    marginBottom: '8px',
-                  }}
-                />
-                <input
-                  type="text"
-                  value={targetContext}
-                  onChange={(e) => setTargetContext(e.target.value)}
-                  disabled={state !== 'idle'}
-                  placeholder="Scenario Context / Details"
-                  style={{
-                    width: '100%',
-                    boxSizing: 'border-box',
-                    background: '#0d1117',
-                    border: '1px solid #30363d',
-                    borderRadius: '6px',
-                    color: '#f0f6fc',
-                    padding: '6px 12px',
+                    background: 'rgba(0, 0, 0, 0.3)',
+                    border: '1px solid var(--border-medium)',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    padding: '9px 14px',
                     fontSize: '0.85rem',
                   }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#c9d1d9', marginBottom: '6px' }}>
-                  Active Regulatory & Safety Guardrails:
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  Scenario Parameters / Details:
                 </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {activeGuardrails.map((rule, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#8b949e' }}>
-                      <span style={{ color: '#3fb950', fontWeight: 'bold' }}>✓</span>
-                      <span>{rule}</span>
-                    </div>
-                  ))}
-                </div>
+                <input
+                  type="text"
+                  value={targetContext}
+                  onChange={(e) => setTargetContext(e.target.value)}
+                  disabled={state !== 'idle'}
+                  placeholder="e.g. Balance: $350.00 • Creditor: Apex"
+                  style={{
+                    width: '100%',
+                    background: 'rgba(0, 0, 0, 0.3)',
+                    border: '1px solid var(--border-medium)',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    padding: '9px 14px',
+                    fontSize: '0.85rem',
+                  }}
+                />
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
 
-      {/* Top Banner & Control Bar */}
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '16px',
-          alignItems: 'center',
-          marginBottom: '20px',
-          padding: '16px 20px',
-          background: '#161b22',
-          borderRadius: '8px',
-          border: '1px solid #30363d',
-        }}
-      >
-        <button
-          onClick={handleToggle}
-          style={{
-            background: state === 'streaming' ? '#da3633' : '#238636',
-            color: '#fff',
-            border: 'none',
-            padding: '10px 24px',
-            borderRadius: '6px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontSize: '1rem',
-          }}
-        >
-          {state === 'streaming' ? 'End Call' : state === 'connecting' ? 'Connecting...' : currentPreset.actionText}
-        </button>
-
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '0.85rem', color: '#8b949e' }}>
-          <span>Subject: <strong style={{ color: '#f0f6fc' }}>{targetSubject}</strong></span>
-          <span>•</span>
-          <span>Context: <strong style={{ color: '#c9d1d9' }}>{targetContext}</strong></span>
-          {isAgentSpeaking && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#58a6ff', fontWeight: 600, marginLeft: '8px' }}>
-              <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#58a6ff' }} />
-              Agent Speaking (Barge-in active)...
-            </span>
+          {configTab === 'guardrails' && (
+            <div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginBottom: '10px' }}>
+                Regulated pipeline filters intercept unauthorized disclosures, PII leaks, and enforce civil communication.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '10px' }}>
+                {activeGuardrails.map((rule, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 12px',
+                      background: 'rgba(16, 185, 129, 0.08)',
+                      border: '1px solid rgba(16, 185, 129, 0.25)',
+                      borderRadius: '8px',
+                      fontSize: '0.8rem',
+                      color: '#a7f3d0',
+                    }}
+                  >
+                    <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
+                    <span>{rule}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
+      )}
 
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '12px', alignItems: 'center' }}>
+      {/* Hero Call Command Console */}
+      <div
+        className="glass-panel"
+        style={{
+          padding: '20px 24px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '20px',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Left side: Call action button & Live Status */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+          <button
+            onClick={handleToggle}
+            style={{
+              padding: '12px 28px',
+              borderRadius: '12px',
+              border: 'none',
+              fontWeight: 700,
+              fontSize: '0.95rem',
+              letterSpacing: '-0.01em',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              color: '#ffffff',
+              background:
+                state === 'streaming'
+                  ? 'var(--danger-gradient)'
+                  : state === 'connecting'
+                  ? 'linear-gradient(135deg, #d97706, #b45309)'
+                  : 'var(--primary-gradient)',
+              boxShadow:
+                state === 'streaming'
+                  ? '0 6px 24px rgba(244, 63, 94, 0.4)'
+                  : '0 6px 24px rgba(99, 102, 241, 0.35)',
+            }}
+          >
+            {state === 'streaming' ? (
+              <>
+                <span style={{ fontSize: '1rem' }}>🛑</span>
+                <span>End Call</span>
+              </>
+            ) : state === 'connecting' ? (
+              <>
+                <span style={{ fontSize: '1rem' }}>⏳</span>
+                <span>Connecting...</span>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: '1rem' }}>📞</span>
+                <span>{currentPreset.actionText}</span>
+              </>
+            )}
+          </button>
+
+          {/* Session Status Pill */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {state === 'streaming' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} className="pulse-active" />
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#34d399', letterSpacing: '0.02em' }}>
+                    LIVE SESSION
+                  </span>
+                  <span className="mono-nums" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    ({formatDuration(callSeconds)})
+                  </span>
+                </div>
+              ) : state === 'connecting' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#fbbf24' }} />
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fbbf24' }}>
+                    CONNECTING PIPELINE...
+                  </span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--text-dim)' }} />
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    STANDBY
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+              {isAgentSpeaking ? (
+                <span style={{ color: '#818cf8', fontWeight: 500 }}>
+                  Agent is speaking • Barge-in armed (&lt;25ms cutoff)
+                </span>
+              ) : state === 'streaming' ? (
+                <span>Streaming mic audio at 16,000 Hz</span>
+              ) : (
+                <span>Click start to initiate real-time conversational agent</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Center: Live Soundwave Equalizer */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            height: '36px',
+            padding: '0 16px',
+            background: 'rgba(255, 255, 255, 0.03)',
+            borderRadius: '10px',
+            border: '1px solid var(--border-subtle)',
+          }}
+        >
+          {Array.from({ length: 10 }).map((_, idx) => (
+            <div
+              key={idx}
+              className={`wave-bar ${state === 'streaming' && (isAgentSpeaking || Math.random() > 0.3) ? 'speaking' : ''}`}
+              style={{
+                height: state === 'streaming' ? '14px' : '4px',
+                opacity: state === 'streaming' ? 1 : 0.25,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Right side: Contact Context & Inspect link */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginLeft: 'auto' }}>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#fff' }}>
+              {targetSubject}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>
+              {targetContext}
+            </div>
+          </div>
+
           {lastCompletedSessionId && (
             <button
               onClick={() => onInspectCall(lastCompletedSessionId)}
               style={{
-                padding: '6px 14px',
-                background: '#1f6feb',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: '1px solid rgba(99, 102, 241, 0.35)',
+                background: 'rgba(99, 102, 241, 0.15)',
+                color: '#a5b4fc',
                 fontWeight: 600,
-                fontSize: '0.85rem',
+                fontSize: '0.8rem',
                 cursor: 'pointer',
               }}
             >
-              Inspect Call in Inspector →
+              <span>Inspect Call Telemetry</span>
+              <span>→</span>
             </button>
           )}
-
-          <span
-            style={{
-              fontWeight: 'bold',
-              fontSize: '0.85rem',
-              color: state === 'streaming' ? '#3fb950' : state === 'connecting' ? '#d29922' : '#8b949e',
-            }}
-          >
-            {state.toUpperCase()}
-          </span>
         </div>
       </div>
 
-      {/* Latency HUD */}
-      <div style={{ marginBottom: '20px' }}>
-        <LatencyHUD
-          queueDepth={hudData.queueDepth}
-          gpuUtil={hudData.gpuUtil}
-          rtf={hudData.rtf}
-          mode="agent"
-          lastCaptureToFinalMs={asrCommitMs}
-          agentTurnLatencyMs={agentTurnLatencyMs}
-          ttsFirstAudioMs={ttsFirstAudioMs}
-          totalRoundTripMs={totalRoundTripMs}
-          agentVerified={identityVerified}
-          promiseCaptured={promiseCaptured}
-        />
-      </div>
+      {/* Latency & Telemetry Ribbon */}
+      <LatencyHUD
+        queueDepth={hudData.queueDepth}
+        gpuUtil={hudData.gpuUtil}
+        rtf={hudData.rtf}
+        mode="agent"
+        lastCaptureToFinalMs={asrCommitMs}
+        agentTurnLatencyMs={agentTurnLatencyMs}
+        ttsFirstAudioMs={ttsFirstAudioMs}
+        totalRoundTripMs={totalRoundTripMs}
+        agentVerified={identityVerified}
+        promiseCaptured={promiseCaptured}
+      />
 
+      {/* Error Banner */}
       {error && (
-        <div style={{ padding: '12px', marginBottom: '16px', background: 'rgba(248, 81, 73, 0.1)', border: '1px solid #f85149', borderRadius: '6px', color: '#ff7b72', fontSize: '0.9rem' }}>
-          {error}
+        <div
+          style={{
+            padding: '12px 18px',
+            background: 'rgba(244, 63, 94, 0.12)',
+            border: '1px solid rgba(244, 63, 94, 0.3)',
+            borderRadius: '10px',
+            color: '#fda4af',
+            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+        >
+          <span>⚠️</span>
+          <span>{error}</span>
         </div>
       )}
 
-      {/* Two Column Grid: Left Live Captions vs Right State Indicators & Compliance Event Stream */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(320px, 1fr)', gap: '20px', alignItems: 'start' }}>
-        {/* Left Column: Live Captions */}
+      {/* Two Column Grid: Left Live Stream vs Right State Machine & Event Audit */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.65fr) minmax(340px, 1fr)', gap: '20px', alignItems: 'start' }}>
+        
+        {/* Left Column: Live Audio & Teleprompter Feed */}
         <div
+          className="glass-panel"
           style={{
-            minHeight: '380px',
-            background: '#0d1117',
-            border: '1px solid #30363d',
-            borderRadius: '8px',
+            minHeight: '480px',
+            display: 'flex',
+            flexDirection: 'column',
             overflow: 'hidden',
           }}
         >
-          <div style={{ padding: '12px 16px', background: '#161b22', borderBottom: '1px solid #30363d', fontSize: '0.85rem', fontWeight: 600, color: '#f0f6fc', display: 'flex', justifyContent: 'space-between' }}>
-            <span>Live Conversation Stream</span>
-            <span style={{ fontSize: '0.75rem', color: '#8b949e' }}>Domain: {currentPreset.title}</span>
-          </div>
-
-          {entries.length === 0 ? (
-            <div style={{ padding: '48px', textAlign: 'center', color: '#484f58' }}>
-              <div style={{ fontSize: '2rem', marginBottom: '12px' }}>🎙️</div>
-              <div>Click <strong>{currentPreset.actionText}</strong> to begin.</div>
-              <div style={{ fontSize: '0.8rem', marginTop: '6px' }}>Speak in Japanese or English to test real-time ASR, agent reasoning, and sub-25ms barge-in.</div>
-            </div>
-          ) : (
-            <div style={{ padding: '16px', maxHeight: '480px', overflowY: 'auto' }}>
-              <Captions entries={entries} />
-            </div>
-          )}
-        </div>
-
-        {/* Right Column: Dynamic Domain State Indicators & Streaming Compliance Feed */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Dynamic Domain State Indicators Card */}
+          {/* Teleprompter Header */}
           <div
             style={{
-              padding: '16px',
-              background: '#161b22',
-              borderRadius: '8px',
-              border: '1px solid #30363d',
+              padding: '14px 20px',
+              borderBottom: '1px solid var(--border-subtle)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'rgba(255, 255, 255, 0.02)',
             }}
           >
-            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#f0f6fc', marginBottom: '12px' }}>
-              Workflow State Machine ({currentPreset.title})
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#fff' }}>
+                Conversation Teleprompter
+              </span>
+              <span
+                style={{
+                  fontSize: '0.7rem',
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid var(--border-subtle)',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                {entries.length} {entries.length === 1 ? 'Turn' : 'Turns'}
+              </span>
             </div>
 
-            {activeDomain === 'collections' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
-                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
-                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Phase</div>
-                  <div style={{ color: '#f0f6fc', fontWeight: 600 }}>{callPhase.toUpperCase()}</div>
-                </div>
-                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
-                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Identity Verified</div>
-                  <div style={{ color: identityVerified ? '#3fb950' : '#8b949e', fontWeight: 600 }}>
-                    {identityVerified ? '✓ VERIFIED' : 'PENDING'}
-                  </div>
-                </div>
-                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
-                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Disclosure Done</div>
-                  <div style={{ color: disclosureDone ? '#3fb950' : '#8b949e', fontWeight: 600 }}>
-                    {disclosureDone ? 'COMPLETED' : 'NO'}
-                  </div>
-                </div>
-                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
-                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Stop Contact</div>
-                  <div style={{ color: stopContact ? '#f85149' : '#3fb950', fontWeight: 600 }}>
-                    {stopContact ? 'TRIGGERED' : 'CLEAR'}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeDomain === 'screening' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
-                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
-                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Screening Stage</div>
-                  <div style={{ color: '#f0f6fc', fontWeight: 600 }}>{screeningStage.toUpperCase()}</div>
-                </div>
-                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
-                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Qualification</div>
-                  <div style={{ color: screeningQualified ? '#3fb950' : '#d29922', fontWeight: 600 }}>
-                    {screeningQualified ? '✓ QUALIFIED' : 'EVALUATING'}
-                  </div>
-                </div>
-                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
-                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Anti-Bias Guard</div>
-                  <div style={{ color: '#3fb950', fontWeight: 600 }}>ACTIVE</div>
-                </div>
-                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
-                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Handoff Recruiter</div>
-                  <div style={{ color: screeningQualified ? '#58a6ff' : '#8b949e', fontWeight: 600 }}>
-                    {screeningQualified ? 'READY' : 'PENDING'}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeDomain === 'kyc' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
-                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
-                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>KYC Authentication</div>
-                  <div style={{ color: identityVerified ? '#3fb950' : '#d29922', fontWeight: 600 }}>
-                    {identityVerified ? '✓ AUTHENTICATED' : 'IN PROGRESS'}
-                  </div>
-                </div>
-                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
-                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Fraud Scan</div>
-                  <div style={{ color: '#3fb950', fontWeight: 600 }}>CLEAR</div>
-                </div>
-                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px', gridColumn: 'span 2' }}>
-                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Inquiry Status</div>
-                  <div style={{ color: kycResolved ? '#3fb950' : '#58a6ff', fontWeight: 600 }}>
-                    {kycResolved ? 'RESOLVED' : 'ACTIVE INQUIRY'}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeDomain === 'custom' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
-                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
-                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Custom Agent</div>
-                  <div style={{ color: '#58a6ff', fontWeight: 600 }}>ACTIVE</div>
-                </div>
-                <div style={{ padding: '8px', background: '#21262d', borderRadius: '4px' }}>
-                  <div style={{ color: '#8b949e', fontSize: '0.7rem' }}>Guardrails</div>
-                  <div style={{ color: '#3fb950', fontWeight: 600 }}>{activeGuardrails.length} ENFORCED</div>
-                </div>
-              </div>
-            )}
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+              Domain: {currentPreset.title}
+            </span>
           </div>
 
-          {/* Streaming Compliance & Safety Ticker */}
+          {/* Teleprompter Body */}
           <div
+            ref={chatScrollRef}
             style={{
-              padding: '16px',
-              background: '#161b22',
-              borderRadius: '8px',
-              border: '1px solid #30363d',
-              maxHeight: '260px',
+              padding: '16px 20px',
+              flex: 1,
+              maxHeight: '520px',
               overflowY: 'auto',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#f0f6fc' }}>
-                Streaming Compliance & Events
-              </span>
-              <span style={{ fontSize: '0.7rem', color: '#8b949e' }}>Real-time</span>
-            </div>
+            {entries.length === 0 ? (
+              <div
+                style={{
+                  padding: '56px 24px',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '16px',
+                }}
+              >
+                <div
+                  style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '16px',
+                    background: 'rgba(99, 102, 241, 0.1)',
+                    border: '1px solid rgba(99, 102, 241, 0.25)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.6rem',
+                  }}
+                >
+                  🎙️
+                </div>
 
-            {eventsFeed.length === 0 ? (
-              <div style={{ fontSize: '0.8rem', color: '#8b949e', fontStyle: 'italic', padding: '12px 0' }}>
-                No events recorded yet. Guards active.
+                <div>
+                  <div style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>
+                    Ready to Start Voice Conversation
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-tertiary)', maxWidth: '420px', lineHeight: '1.5' }}>
+                    Press <strong>{currentPreset.actionText}</strong> and speak through your microphone in {agentLanguage === 'ja' ? 'Japanese' : 'English'}.
+                  </div>
+                </div>
+
+                {/* Quick prompt hints */}
+                <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', maxWidth: '440px' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-tertiary)' }}>
+                    Sample Utterances to Test:
+                  </span>
+                  {activeDomain === 'collections' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'left' }}>
+                        💬 {agentLanguage === 'ja' ? '「山田太郎です。生年月日は1988年4月15日です。」' : '"Yes, this is Alex. My date of birth is April 15, 1988."'}
+                      </div>
+                      <div style={{ padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'left' }}>
+                        💬 {agentLanguage === 'ja' ? '「今月は厳しいので、来月15日に2万円支払います。」' : '"I can pay $200 on the 15th of next month."'}
+                      </div>
+                    </div>
+                  )}
+                  {activeDomain === 'screening' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'left' }}>
+                        💬 {agentLanguage === 'ja' ? '「Reactと分散システムの開発経験が6年あります。」' : '"I have 6 years of experience building distributed systems in React and TypeScript."'}
+                      </div>
+                    </div>
+                  )}
+                  {activeDomain === 'kyc' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'left' }}>
+                        💬 {agentLanguage === 'ja' ? '「電話番号は090-1234-5678、暗証番号は4821です。」' : '"My registered phone is 555-0199 and security PIN is 4821."'}
+                      </div>
+                    </div>
+                  )}
+                  {activeDomain === 'custom' && (
+                    <div style={{ padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'left' }}>
+                      💬 {agentLanguage === 'ja' ? '「サービスの詳細とお見積りについて教えてください。」' : '"Tell me about your enterprise voice AI services."'}
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
+              <Captions entries={entries} />
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Workflow State Machine & Compliance Audit Feed */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          
+          {/* Card 1: Workflow State Machine */}
+          <div className="glass-panel" style={{ padding: '18px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#fff' }}>
+                Workflow State Machine
+              </span>
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  background: 'rgba(99, 102, 241, 0.15)',
+                  color: '#a5b4fc',
+                }}
+              >
+                {currentPreset.title}
+              </span>
+            </div>
+
+            {/* Collections Stepper */}
+            {activeDomain === 'collections' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {/* 4 Pipeline Stages */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {[
+                    { key: 'greet', title: '1. Greeting & Disclose Identity', isDone: callPhase !== 'greet', isCurrent: callPhase === 'greet' },
+                    { key: 'verify', title: '2. Debtor DOB Verification', isDone: identityVerified, isCurrent: callPhase === 'verify' },
+                    { key: 'disclose', title: '3. Debt Disclosure & Hardship', isDone: disclosureDone || callPhase === 'close', isCurrent: callPhase === 'disclose' },
+                    { key: 'close', title: '4. Promise to Pay / Escalation', isDone: Boolean(promiseCaptured), isCurrent: callPhase === 'close' },
+                  ].map((step, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '9px 12px',
+                        borderRadius: '8px',
+                        background: step.isDone
+                          ? 'rgba(16, 185, 129, 0.08)'
+                          : step.isCurrent
+                          ? 'rgba(99, 102, 241, 0.12)'
+                          : 'rgba(255, 255, 255, 0.02)',
+                        border: step.isDone
+                          ? '1px solid rgba(16, 185, 129, 0.25)'
+                          : step.isCurrent
+                          ? '1px solid rgba(99, 102, 241, 0.4)'
+                          : '1px solid var(--border-subtle)',
+                      }}
+                    >
+                      <span style={{ fontSize: '0.8rem', fontWeight: step.isCurrent ? 600 : 400, color: step.isDone ? '#a7f3d0' : step.isCurrent ? '#fff' : 'var(--text-secondary)' }}>
+                        {step.title}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '0.68rem',
+                          fontWeight: 600,
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          background: step.isDone ? 'rgba(16, 185, 129, 0.2)' : step.isCurrent ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                          color: step.isDone ? '#34d399' : step.isCurrent ? '#a5b4fc' : 'var(--text-tertiary)',
+                        }}
+                      >
+                        {step.isDone ? '✓ DONE' : step.isCurrent ? 'ACTIVE' : 'PENDING'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Sub-metrics */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginTop: '6px' }}>
+                  <div style={{ padding: '8px 10px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)' }}>Stop Contact</div>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: stopContact ? 'var(--accent-rose)' : 'var(--accent-emerald)' }}>
+                      {stopContact ? 'TRIGGERED' : 'CLEAR'}
+                    </div>
+                  </div>
+                  <div style={{ padding: '8px 10px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)' }}>Promise Captured</div>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: promiseCaptured ? '#60a5fa' : 'var(--text-dim)' }}>
+                      {promiseCaptured || 'None'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Screening Stepper */}
+            {activeDomain === 'screening' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {eventsFeed.map((ev, index) => {
-                  let badgeBg = '#21262d';
-                  let badgeColor = '#c9d1d9';
+                {[
+                  { title: '1. Candidate Greeting & Context', isDone: screeningStage !== 'intro', isCurrent: screeningStage === 'intro' },
+                  { title: '2. Stack & Architecture Interview', isDone: screeningStage === 'expectations' || screeningStage === 'qualified', isCurrent: screeningStage === 'experience' },
+                  { title: '3. Compensation & Mode Verification', isDone: screeningStage === 'qualified', isCurrent: screeningStage === 'expectations' },
+                  { title: '4. First-Round Qualification Verdict', isDone: screeningQualified, isCurrent: screeningStage === 'qualified' },
+                ].map((step, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      background: step.isDone
+                        ? 'rgba(16, 185, 129, 0.08)'
+                        : step.isCurrent
+                        ? 'rgba(99, 102, 241, 0.12)'
+                        : 'rgba(255, 255, 255, 0.02)',
+                      border: step.isDone
+                        ? '1px solid rgba(16, 185, 129, 0.25)'
+                        : step.isCurrent
+                        ? '1px solid rgba(99, 102, 241, 0.4)'
+                        : '1px solid var(--border-subtle)',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.8rem', color: step.isDone ? '#a7f3d0' : step.isCurrent ? '#fff' : 'var(--text-secondary)' }}>
+                      {step.title}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        fontWeight: 600,
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        background: step.isDone ? 'rgba(16, 185, 129, 0.2)' : step.isCurrent ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                        color: step.isDone ? '#34d399' : step.isCurrent ? '#a5b4fc' : 'var(--text-tertiary)',
+                      }}
+                    >
+                      {step.isDone ? '✓ DONE' : step.isCurrent ? 'ACTIVE' : 'PENDING'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* KYC Stepper */}
+            {activeDomain === 'kyc' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {[
+                  { title: '1. Customer Inbound Greeting', isDone: true, isCurrent: !identityVerified },
+                  { title: '2. 4-Digit Security PIN Verification', isDone: identityVerified, isCurrent: !identityVerified },
+                  { title: '3. Authenticated Account Inquiry', isDone: kycResolved, isCurrent: identityVerified && !kycResolved },
+                  { title: '4. Case Resolution & Wrap-up', isDone: kycResolved, isCurrent: kycResolved },
+                ].map((step, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      background: step.isDone
+                        ? 'rgba(16, 185, 129, 0.08)'
+                        : step.isCurrent
+                        ? 'rgba(99, 102, 241, 0.12)'
+                        : 'rgba(255, 255, 255, 0.02)',
+                      border: step.isDone
+                        ? '1px solid rgba(16, 185, 129, 0.25)'
+                        : step.isCurrent
+                        ? '1px solid rgba(99, 102, 241, 0.4)'
+                        : '1px solid var(--border-subtle)',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.8rem', color: step.isDone ? '#a7f3d0' : step.isCurrent ? '#fff' : 'var(--text-secondary)' }}>
+                      {step.title}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        fontWeight: 600,
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        background: step.isDone ? 'rgba(16, 185, 129, 0.2)' : step.isCurrent ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                        color: step.isDone ? '#34d399' : step.isCurrent ? '#a5b4fc' : 'var(--text-tertiary)',
+                      }}
+                    >
+                      {step.isDone ? '✓ AUTH' : step.isCurrent ? 'ACTIVE' : 'PENDING'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Custom Stepper */}
+            {activeDomain === 'custom' && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                <div style={{ padding: '10px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Mode</div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#a5b4fc' }}>Custom Enterprise Agent</div>
+                </div>
+                <div style={{ padding: '10px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Active Rules</div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-emerald)' }}>{activeGuardrails.length} Enforced</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Card 2: Streaming Compliance & Safety Audit Feed */}
+          <div
+            className="glass-panel"
+            style={{
+              padding: '18px 20px',
+              maxHeight: '300px',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#fff' }}>
+                  Safety & Intercept Audit
+                </span>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} />
+              </div>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Real-time</span>
+            </div>
+
+            <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {eventsFeed.length === 0 ? (
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontStyle: 'italic', padding: '16px 0', textAlign: 'center' }}>
+                  No intercept events yet. Guardrails armed.
+                </div>
+              ) : (
+                eventsFeed.map((ev, index) => {
+                  let badgeBg = 'rgba(255, 255, 255, 0.04)';
+                  let badgeColor = 'var(--text-secondary)';
+                  let borderColor = 'var(--border-subtle)';
 
                   if (ev.type === 'compliance_block') {
-                    badgeBg = 'rgba(248, 81, 73, 0.15)';
-                    badgeColor = '#f85149';
+                    badgeBg = 'rgba(244, 63, 94, 0.12)';
+                    badgeColor = 'var(--accent-rose)';
+                    borderColor = 'rgba(244, 63, 94, 0.3)';
                   } else if (ev.type === 'identity_verified' || ev.type === 'candidate_qualified' || ev.type === 'promise_to_pay') {
-                    badgeBg = 'rgba(63, 185, 80, 0.15)';
-                    badgeColor = '#3fb950';
+                    badgeBg = 'rgba(16, 185, 129, 0.12)';
+                    badgeColor = 'var(--accent-emerald)';
+                    borderColor = 'rgba(16, 185, 129, 0.3)';
                   } else if (ev.type === 'interrupt') {
-                    badgeBg = 'rgba(210, 153, 34, 0.15)';
-                    badgeColor = '#d29922';
+                    badgeBg = 'rgba(245, 158, 11, 0.12)';
+                    badgeColor = 'var(--accent-amber)';
+                    borderColor = 'rgba(245, 158, 11, 0.3)';
                   } else if (ev.type === 'escalate' || ev.type === 'stop_contact') {
-                    badgeBg = 'rgba(163, 113, 247, 0.15)';
-                    badgeColor = '#a371f7';
+                    badgeBg = 'rgba(168, 85, 247, 0.12)';
+                    badgeColor = 'var(--accent-purple)';
+                    borderColor = 'rgba(168, 85, 247, 0.3)';
                   }
 
                   return (
                     <div
                       key={index}
                       style={{
-                        padding: '8px 10px',
+                        padding: '8px 12px',
                         background: badgeBg,
-                        border: `1px solid ${badgeColor}33`,
-                        borderRadius: '6px',
-                        fontSize: '0.8rem',
+                        border: `1px solid ${borderColor}`,
+                        borderRadius: '8px',
+                        fontSize: '0.78rem',
                       }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                        <span style={{ fontWeight: 600, color: badgeColor, textTransform: 'uppercase', fontSize: '0.7rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+                        <span style={{ fontWeight: 700, color: badgeColor, textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: '0.04em' }}>
                           {ev.type}
                         </span>
-                        <span style={{ color: '#8b949e', fontSize: '0.65rem' }}>{ev.time}</span>
+                        <span className="mono-nums" style={{ color: 'var(--text-tertiary)', fontSize: '0.65rem' }}>{ev.time}</span>
                       </div>
-                      <div style={{ color: '#f0f6fc' }}>{ev.text}</div>
+                      <div style={{ color: 'var(--text-primary)', lineHeight: '1.4' }}>{ev.text}</div>
                     </div>
                   );
-                })}
-              </div>
-            )}
+                })
+              )}
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
 };
+

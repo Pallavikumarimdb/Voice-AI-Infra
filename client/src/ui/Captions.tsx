@@ -16,101 +16,174 @@ interface CaptionsProps {
 
 export const Captions: React.FC<CaptionsProps> = ({ entries }) => {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '4px' }}>
       {entries.map((entry) => (
         <div
           key={entry.uttId}
           style={{
-            background: 'rgba(255, 255, 255, 0.03)',
-            borderRadius: '8px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            background: 'rgba(255, 255, 255, 0.02)',
+            borderRadius: '12px',
             padding: '14px 16px',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            border: '1px solid var(--border-subtle)',
+            transition: 'border-color 0.2s ease',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-            <span style={{ fontSize: '0.8rem', color: '#8b949e' }}>
-              Utterance #{entry.uttId}
+          {/* Turn Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span
+              className="mono-nums"
+              style={{
+                fontSize: '0.72rem',
+                color: 'var(--text-tertiary)',
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+              }}
+            >
+              TURN #{entry.uttId}
             </span>
+
             {entry.interrupted && (
               <span
                 style={{
-                  fontSize: '0.75rem',
+                  fontSize: '0.7rem',
                   fontWeight: 600,
-                  color: '#f85149',
-                  background: 'rgba(248, 81, 73, 0.15)',
+                  color: 'var(--accent-rose)',
+                  background: 'rgba(244, 63, 94, 0.12)',
                   padding: '2px 8px',
-                  borderRadius: '10px',
-                  border: '1px solid rgba(248, 81, 73, 0.3)',
+                  borderRadius: '9999px',
+                  border: '1px solid rgba(244, 63, 94, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
                 }}
               >
-                ⚡ Barge-in Cutoff
+                <span>⚡</span>
+                <span>Barge-in Cutoff</span>
               </span>
             )}
           </div>
 
-          {/* Caller Speech */}
-          <div style={{ fontSize: '1.15rem', lineHeight: '1.5' }}>
-            <span style={{ fontSize: '0.85rem', color: '#8b949e', marginRight: '8px' }}>
-              👤 Caller:
-            </span>
-            {entry.finalText ? (
-              <span style={{ color: '#f0f6fc' }}>{entry.finalText}</span>
-            ) : (
-              <span style={{ color: '#8b949e', fontStyle: 'italic' }}>
-                {entry.partialText || '...'}
-              </span>
-            )}
+          {/* Caller Utterance Bubble */}
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+            <div
+              style={{
+                width: '26px',
+                height: '26px',
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.75rem',
+                flexShrink: 0,
+                color: 'var(--text-secondary)',
+                marginTop: '2px',
+              }}
+            >
+              👤
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: '3px' }}>
+                Caller
+              </div>
+              <div
+                style={{
+                  fontSize: '0.95rem',
+                  lineHeight: '1.5',
+                  color: entry.finalText ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  fontStyle: entry.finalText ? 'normal' : 'italic',
+                }}
+              >
+                {entry.finalText || entry.partialText || 'Listening...'}
+              </div>
+            </div>
           </div>
 
           {/* Committed Translation (Translate Mode) */}
           {entry.translation && (
             <div
               style={{
-                marginTop: '8px',
-                paddingTop: '8px',
-                borderTop: '1px dashed rgba(255, 255, 255, 0.1)',
-                color: '#58a6ff',
-                fontSize: '1.05rem',
-                fontWeight: 500,
+                marginLeft: '36px',
+                padding: '8px 12px',
+                background: 'rgba(6, 182, 212, 0.08)',
+                border: '1px solid rgba(6, 182, 212, 0.2)',
+                borderRadius: '8px',
+                color: 'var(--accent-cyan)',
+                fontSize: '0.9rem',
+                lineHeight: '1.4',
               }}
             >
-              ↳ {entry.translation}
+              <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#38bdf8', marginBottom: '2px' }}>
+                ↳ TRANSLATION
+              </div>
+              <div>{entry.translation}</div>
             </div>
           )}
 
-          {/* Agent Voice Response (Agent Mode) */}
+          {/* Agent Utterance Bubble */}
           {entry.agentText && (
             <div
               style={{
-                marginTop: '10px',
-                padding: '10px 12px',
-                background: entry.interrupted ? 'rgba(248, 81, 73, 0.05)' : 'rgba(56, 139, 253, 0.08)',
-                border: `1px solid ${entry.interrupted ? 'rgba(248, 81, 73, 0.3)' : 'rgba(56, 139, 253, 0.25)'}`,
-                borderRadius: '6px',
-                textDecoration: entry.interrupted ? 'line-through' : 'none',
-                opacity: entry.interrupted ? 0.75 : 1.0,
+                marginLeft: '12px',
+                background: entry.interrupted
+                  ? 'rgba(244, 63, 94, 0.05)'
+                  : 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.06) 100%)',
+                border: `1px solid ${entry.interrupted ? 'rgba(244, 63, 94, 0.25)' : 'rgba(99, 102, 241, 0.25)'}`,
+                borderRadius: '10px',
+                padding: '12px 14px',
+                marginTop: '4px',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#58a6ff' }}>
-                  🤖 Voice Agent
-                </span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div
+                    style={{
+                      width: '20px',
+                      height: '20px',
+                      borderRadius: '5px',
+                      background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.65rem',
+                    }}
+                  >
+                    🤖
+                  </div>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#a5b4fc' }}>
+                    Voice AI Agent
+                  </span>
+                </div>
+
                 {entry.agentNode && (
                   <span
+                    className="mono-nums"
                     style={{
-                      fontSize: '0.7rem',
-                      fontFamily: 'monospace',
-                      background: 'rgba(255, 255, 255, 0.1)',
-                      color: '#c9d1d9',
-                      padding: '1px 6px',
+                      fontSize: '0.68rem',
+                      background: 'rgba(255, 255, 255, 0.06)',
+                      color: 'var(--text-secondary)',
+                      padding: '2px 6px',
                       borderRadius: '4px',
+                      border: '1px solid var(--border-subtle)',
                     }}
                   >
                     node: {entry.agentNode}
                   </span>
                 )}
               </div>
-              <div style={{ color: '#e6edf3', fontSize: '1.05rem', lineHeight: '1.5' }}>
+
+              <div
+                style={{
+                  fontSize: '0.95rem',
+                  lineHeight: '1.5',
+                  color: entry.interrupted ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                  textDecoration: entry.interrupted ? 'line-through' : 'none',
+                  opacity: entry.interrupted ? 0.75 : 1.0,
+                }}
+              >
                 {entry.agentText}
               </div>
             </div>
@@ -120,3 +193,4 @@ export const Captions: React.FC<CaptionsProps> = ({ entries }) => {
     </div>
   );
 };
+

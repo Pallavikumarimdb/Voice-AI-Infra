@@ -97,7 +97,7 @@ export const App: React.FC = () => {
   }, [selectedCallId]);
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0d1117', color: '#c9d1d9', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: 'transparent', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column' }}>
       {/* Top Navigation */}
       <Navbar
         activeTab={activeTab}
