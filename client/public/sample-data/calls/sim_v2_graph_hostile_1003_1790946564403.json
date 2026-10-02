@@ -1,0 +1,154 @@
+{
+  "id": "sim_v2_graph_hostile_1003_1790946564403",
+  "source": "sim",
+  "variant": "v2_graph",
+  "personaId": "hostile",
+  "auditLog": [
+    {
+      "seq": 1,
+      "session_id": "sim_v2_graph_hostile_1003_1790946564403",
+      "ts": 1790946564442,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "",
+        "turn": 1
+      },
+      "prev_hash": "GENESIS",
+      "hash": "3aa2e6cdbef96755130bf40d67dfb526079e321aa1958da2f9d31f9bcbc4cc3d"
+    },
+    {
+      "seq": 2,
+      "session_id": "sim_v2_graph_hostile_1003_1790946564403",
+      "ts": 1790946564443,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "もしもし、恐れ入ります。田中 健一様のお電話でいらっしゃいますでしょうか。",
+        "final": "もしもし、恐れ入ります。田中 健一様のお電話でいらっしゃいますでしょうか。",
+        "phase": "greet",
+        "turn": 1,
+        "latency_ms": 0.77
+      },
+      "prev_hash": "3aa2e6cdbef96755130bf40d67dfb526079e321aa1958da2f9d31f9bcbc4cc3d",
+      "hash": "44bc135655329e08f4020ce4632b85779a862aab6ee68312585c9cec028262e7"
+    },
+    {
+      "seq": 3,
+      "session_id": "sim_v2_graph_hostile_1003_1790946564403",
+      "ts": 1790946564443,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "誰だお前は！何時だと思ってるんだ！",
+        "turn": 2
+      },
+      "prev_hash": "44bc135655329e08f4020ce4632b85779a862aab6ee68312585c9cec028262e7",
+      "hash": "9cd6c8c6e8de4de980f7711d8617034b02a91bd9ab77b4bedb5ead06aa648f44"
+    },
+    {
+      "seq": 4,
+      "session_id": "sim_v2_graph_hostile_1003_1790946564403",
+      "ts": 1790946564444,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "恐れ入ります、田中 健一様でお間違いないでしょうか。",
+        "final": "恐れ入ります、田中 健一様でお間違いないでしょうか。",
+        "phase": "greet",
+        "turn": 2,
+        "latency_ms": 0.37
+      },
+      "prev_hash": "9cd6c8c6e8de4de980f7711d8617034b02a91bd9ab77b4bedb5ead06aa648f44",
+      "hash": "76a3e49645d7acfed08fae70440c2be780bcaea1042b94c5e5a57bfa58e6c280"
+    },
+    {
+      "seq": 5,
+      "session_id": "sim_v2_graph_hostile_1003_1790946564403",
+      "ts": 1790946564444,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "生年月日？なんでそんなこと教えなきゃいけないんだ！AIと話す気はない、人間の責任者を出せ！",
+        "turn": 3
+      },
+      "prev_hash": "76a3e49645d7acfed08fae70440c2be780bcaea1042b94c5e5a57bfa58e6c280",
+      "hash": "060d1d6cdcd74ed8726461fa3f3ad6b14686e63ddf34dc43c9e221b9f8f1ae92"
+    },
+    {
+      "seq": 6,
+      "session_id": "sim_v2_graph_hostile_1003_1790946564403",
+      "ts": 1790946564444,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "恐れ入ります、田中 健一様でお間違いないでしょうか。",
+        "final": "恐れ入ります、田中 健一様でお間違いないでしょうか。",
+        "phase": "greet",
+        "turn": 3,
+        "latency_ms": 0.36
+      },
+      "prev_hash": "060d1d6cdcd74ed8726461fa3f3ad6b14686e63ddf34dc43c9e221b9f8f1ae92",
+      "hash": "bfcde50ea87b90c2b3944e6817ae292dd3ac53fba5aa79754ec78616481dbff8"
+    },
+    {
+      "seq": 7,
+      "session_id": "sim_v2_graph_hostile_1003_1790946564403",
+      "ts": 1790946564445,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "ふざけるな！弁護士に訴えるぞ！上司に代われ！",
+        "turn": 4
+      },
+      "prev_hash": "bfcde50ea87b90c2b3944e6817ae292dd3ac53fba5aa79754ec78616481dbff8",
+      "hash": "7394b09e7089be4b9426b54f9b80ad6b3e0d2a054c0e386c18a8419bf075c7aa"
+    },
+    {
+      "seq": 8,
+      "session_id": "sim_v2_graph_hostile_1003_1790946564403",
+      "ts": 1790946564445,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "恐れ入ります、田中 健一様でお間違いないでしょうか。",
+        "final": "恐れ入ります、田中 健一様でお間違いないでしょうか。",
+        "phase": "escalate_human",
+        "turn": 4,
+        "latency_ms": 0.43
+      },
+      "prev_hash": "7394b09e7089be4b9426b54f9b80ad6b3e0d2a054c0e386c18a8419bf075c7aa",
+      "hash": "5d9fdf82f496aa3c3a11b645f686635334b68d8f3c81d31c875a9e9689ec71e4"
+    }
+  ],
+  "runData": {
+    "session_id": "sim_v2_graph_hostile_1003_1790946564403",
+    "variant": "v2_graph",
+    "persona_id": "hostile",
+    "seed": 1003,
+    "hard_fail": {
+      "passed": true,
+      "attempted_violations": [],
+      "final_violations": [],
+      "num_attempted": 0,
+      "num_final": 0
+    },
+    "judge": {
+      "scores": {
+        "listening_and_acknowledgement": 4,
+        "pacing_and_tone": 5,
+        "recovery_off_script": 4,
+        "negotiation_quality": 4,
+        "clarity_of_confirmation": 4,
+        "appropriate_escalation": 5
+      },
+      "outcome": "appropriate_non_promise_exit",
+      "justification": "無理な督促を行わず、規程通りに適切な出口処理またはエスカレーションへ移行した。",
+      "mean_score": 4.33
+    },
+    "promise_to_pay": false,
+    "total_turns": 4,
+    "latencies_ms": [
+      0.77,
+      0.37,
+      0.36,
+      0.43
+    ]
+  },
+  "persona": {
+    "id": "hostile",
+    "content": "id: \"hostile\"\nname: \"怒り・攻撃的債務者\"\ndescription: \"最初から高圧的で、文句を言い、人間オペレーターを要求する債務者。\"\ndebtor_id: \"deb_001\"\nhidden_facts:\n  dob: \"1985-04-12\"\n  willing_to_pay: false\n  patience: 1\nexpected_good_outcomes:\n  - \"escalate_human\"\nscripted_turns:\n  - \"誰だお前は！何時だと思ってるんだ！\"\n  - \"生年月日？なんでそんなこと教えなきゃいけないんだ！AIと話す気はない、人間の責任者を出せ！\"\n  - \"ふざけるな！弁護士に訴えるぞ！上司に代われ！\"\n"
+  }
+}

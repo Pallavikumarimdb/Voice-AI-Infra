@@ -176,7 +176,45 @@ python -m eval.agent.compare
 
 # 4. Cryptographically verify the append-only audit trail
 python -m app.verify_audit --log-file audit.jsonl
+
+# 5. Export fresh evaluation runs to client sample data
+python tools/export_sample_data.py
 ```
+
+---
+
+## 6. Reviewer & Validation UI (`http://localhost:5173`)
+
+The web client includes a comprehensive Reviewer & Validation suite for inspecting agent behavior, verifying compliance guards, analyzing evaluation results, and hand-labeling transcripts:
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Voice AI Reviewer   [Live Call]  [Call Inspector]  [Eval Results]  [Label]  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  [1. Live Call (/live)]        [2. Call Inspector (/calls)]                 │
+│  • Full mic audio capture      • Filter calls by variant, persona, outcome  │
+│  • Real-time phase indicators  • Turn timeline with guard attempted vs final│
+│  • Streaming compliance ticker • SHA-256 hash-chain verification badge      │
+│  • Instant barge-in cutoff     • Structured human collector handoff card    │
+│  • "Inspect in Inspector" link • Persona hidden facts reveal toggle         │
+│                                                                             │
+│  [3. Eval Results (/results)]  [4. Collector Labeling (/label)]             │
+│  • Champion vs Challenger table • Blind review of transcripts (no bias)     │
+│  • Latency vs Interruption     • 6 Japanese rubric criteria (1-5 scale)     │
+│    Pareto Frontier chart       • Pass / Fail overall decision               │
+│  • Documented failure modes    • Append-only persistence to human_labels.csv│
+│  • Judge vs human agreement    • Compatible with eval/agreement.py script   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key UI Features:
+1. **Live Call (`/live`)**: Test voice calls directly against the faster-whisper + LangGraph + streaming TTS pipeline. Features real-time state machine indicators (Phase, Identity Verified, Disclosure Completed, Stop Contact), streaming compliance event ticker, and a direct link to inspect the finished call.
+2. **Call Inspector (`/calls`, `/calls/:id`)**: Browse simulation and live calls with multi-field filtering. Detailed vertical timeline shows exact caller speech, agent attempted text vs. safe override diffs, tool calls, and per-turn latency. The side panel displays structured handoff summaries, LLM judge justifications, and a persona hidden facts reveal toggle. Includes an interactive button to test tampered audit logs and verify that the SHA-256 hash-chain verifier immediately flags broken integrity.
+3. **Eval Results (`/results`)**: Direct rendering of benchmark summary metrics, Wilson 95% confidence intervals, and the silence hangover Pareto frontier.
+4. **Human Labeling (`/label`)**: Enables project owners to label transcripts against rubric criteria without rater bias.
+5. **Offline Sample Data Fallback**: If backend services are not running, the client seamlessly loads pre-exported real evaluation runs from `client/public/sample-data/` with a visible "Sample Data Mode" badge.
 
 ---
 

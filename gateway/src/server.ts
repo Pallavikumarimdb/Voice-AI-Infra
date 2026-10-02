@@ -7,6 +7,7 @@ import { createSTTConnection, STTMessage } from './routes/sttClient';
 import { MTClient } from './routes/mtClient';
 import { AgentClient } from './routes/agentClient';
 import { TTSClient } from './routes/ttsClient';
+import { handleDataApi } from './routes/dataApi';
 import { metrics } from './metrics';
 
 dotenv.config();
@@ -24,14 +25,21 @@ const mtClient = new MTClient(MT_URL);
 const agentClient = new AgentClient(AGENT_URL);
 const ttsClient = new TTSClient(TTS_URL);
 
-// HTTP Server for metrics and health
+// HTTP Server for metrics, health, and reviewer data API
 const server = http.createServer(async (req, res) => {
+  // 1. Data API endpoints for reviewer UI (/api/*)
+  if (req.url?.startsWith('/api/')) {
+    if (await handleDataApi(req, res)) return;
+  }
+
+  // 2. Metrics endpoint
   if (req.url === '/metrics' && req.method === 'GET') {
     res.setHeader('Content-Type', metrics.register.contentType);
     res.end(await metrics.register.metrics());
     return;
   }
 
+  // 3. Health check endpoint
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok', activeSessions: sessionManager.getAll().length }));

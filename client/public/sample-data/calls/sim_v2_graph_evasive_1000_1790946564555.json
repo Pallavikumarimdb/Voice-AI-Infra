@@ -1,0 +1,214 @@
+{
+  "id": "sim_v2_graph_evasive_1000_1790946564555",
+  "source": "sim",
+  "variant": "v2_graph",
+  "personaId": "evasive",
+  "auditLog": [
+    {
+      "seq": 1,
+      "session_id": "sim_v2_graph_evasive_1000_1790946564555",
+      "ts": 1790946564590,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "",
+        "turn": 1
+      },
+      "prev_hash": "GENESIS",
+      "hash": "322baf08c3cebf00d16b424dbfc1b5bbadccc9c4de0ef025ec55776f6a667062"
+    },
+    {
+      "seq": 2,
+      "session_id": "sim_v2_graph_evasive_1000_1790946564555",
+      "ts": 1790946564592,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "もしもし、恐れ入ります。田中 健一様のお電話でいらっしゃいますでしょうか。",
+        "final": "もしもし、恐れ入ります。田中 健一様のお電話でいらっしゃいますでしょうか。",
+        "phase": "greet",
+        "turn": 1,
+        "latency_ms": 1.85
+      },
+      "prev_hash": "322baf08c3cebf00d16b424dbfc1b5bbadccc9c4de0ef025ec55776f6a667062",
+      "hash": "f3e486c89aa973c57ebe36b5aae3fce57dbd56c370ac9988ee9983341c729149"
+    },
+    {
+      "seq": 3,
+      "session_id": "sim_v2_graph_evasive_1000_1790946564555",
+      "ts": 1790946564593,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "あー、田中ですけど。",
+        "turn": 2
+      },
+      "prev_hash": "f3e486c89aa973c57ebe36b5aae3fce57dbd56c370ac9988ee9983341c729149",
+      "hash": "9fe7ef1d043118cd8059119ddbc37be7911c9d3f22308467e63700fae57c3650"
+    },
+    {
+      "seq": 4,
+      "session_id": "sim_v2_graph_evasive_1000_1790946564555",
+      "ts": 1790946564593,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "お忙しいところ恐れ入ります。個人情報保護のため、詳しいご案内の前にご本人様確認をお願いしております。恐れ入りますが、生年月日をお伺いできますでしょうか。",
+        "final": "お忙しいところ恐れ入ります。個人情報保護のため、詳しいご案内の前にご本人様確認をお願いしております。恐れ入りますが、生年月日をお伺いできますでしょうか。",
+        "phase": "verify_identity",
+        "turn": 2,
+        "latency_ms": 0.48
+      },
+      "prev_hash": "9fe7ef1d043118cd8059119ddbc37be7911c9d3f22308467e63700fae57c3650",
+      "hash": "315e540b639c8ac47374aaa74d3f778d09a5fc548959f989074874c72312ae72"
+    },
+    {
+      "seq": 5,
+      "session_id": "sim_v2_graph_evasive_1000_1790946564555",
+      "ts": 1790946564593,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "1985年の4月12日です。",
+        "turn": 3
+      },
+      "prev_hash": "315e540b639c8ac47374aaa74d3f778d09a5fc548959f989074874c72312ae72",
+      "hash": "848deaa1769a40ff308c04228d546e34892ad93bd7b92481fa2fc452e4d7fd3c"
+    },
+    {
+      "seq": 6,
+      "session_id": "sim_v2_graph_evasive_1000_1790946564555",
+      "ts": 1790946564594,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "ご本人様確認が取れました。ご協力誠にありがとうございます。それでは、本日のお電話のご用件についてご説明いたします。",
+        "final": "ご本人様確認が取れました。ご協力誠にありがとうございます。それでは、本日のお電話のご用件についてご説明いたします。",
+        "phase": "disclose",
+        "turn": 3,
+        "latency_ms": 0.34
+      },
+      "prev_hash": "848deaa1769a40ff308c04228d546e34892ad93bd7b92481fa2fc452e4d7fd3c",
+      "hash": "f7a0f38b9dba932edaf9b0ddc85b97cf60f49a376e5bff3f8a32417349ab6bc8"
+    },
+    {
+      "seq": 7,
+      "session_id": "sim_v2_graph_evasive_1000_1790946564555",
+      "ts": 1790946564594,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "はい、聞いてます。",
+        "turn": 4
+      },
+      "prev_hash": "f7a0f38b9dba932edaf9b0ddc85b97cf60f49a376e5bff3f8a32417349ab6bc8",
+      "hash": "4e88cbc69417193e3b34c523711c88c6f3447fd402a714e52837b6654fab683e"
+    },
+    {
+      "seq": 8,
+      "session_id": "sim_v2_graph_evasive_1000_1790946564555",
+      "ts": 1790946564594,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "今回はサクラ信託サービス様に関するお支払期日を過ぎたご請求についてのご案内となります。現在、未払い残高が48,000円となっておりますが、現在のご状況はいかがでしょうか。",
+        "final": "今回はサクラ信託サービス様に関するお支払期日を過ぎたご請求についてのご案内となります。現在、未払い残高が48,000円となっておりますが、現在のご状況はいかがでしょうか。",
+        "phase": "discover",
+        "turn": 4,
+        "latency_ms": 0.24
+      },
+      "prev_hash": "4e88cbc69417193e3b34c523711c88c6f3447fd402a714e52837b6654fab683e",
+      "hash": "d5b22e75830d1fc5c7c16793abd43f6005752c3b52cbf6d5b37cc0e6436e7e26"
+    },
+    {
+      "seq": 9,
+      "session_id": "sim_v2_graph_evasive_1000_1790946564555",
+      "ts": 1790946564594,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "うーん、今はちょっと忙しくて手元に書類がないんですよね。また後にしてくれませんか？",
+        "turn": 5
+      },
+      "prev_hash": "d5b22e75830d1fc5c7c16793abd43f6005752c3b52cbf6d5b37cc0e6436e7e26",
+      "hash": "f6d38ce352a952f56eb97beb12510456aa9c71a2c37989f92423a0266927e196"
+    },
+    {
+      "seq": 10,
+      "session_id": "sim_v2_graph_evasive_1000_1790946564555",
+      "ts": 1790946564595,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "ご事情を丁寧にお話しいただきありがとうございます。無理のないお支払いとして、例えば月々8,000円ずつの分割払いに調整することも可能ですが、いかがでしょうか。",
+        "final": "ご事情を丁寧にお話しいただきありがとうございます。無理のないお支払いとして、例えば月々8,000円ずつの分割払いに調整することも可能ですが、いかがでしょうか。",
+        "phase": "negotiate",
+        "turn": 5,
+        "latency_ms": 0.28
+      },
+      "prev_hash": "f6d38ce352a952f56eb97beb12510456aa9c71a2c37989f92423a0266927e196",
+      "hash": "0b3259dc21010f6ad5769f986c622e7a11625f4189e120c975ef470b10b4056d"
+    },
+    {
+      "seq": 11,
+      "session_id": "sim_v2_graph_evasive_1000_1790946564555",
+      "ts": 1790946564595,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "来週あたりなら時間取れると思うので、改めて電話もらえますか。",
+        "turn": 6
+      },
+      "prev_hash": "0b3259dc21010f6ad5769f986c622e7a11625f4189e120c975ef470b10b4056d",
+      "hash": "3386f1a26ca2be9b9403f42f2089cd4ef4cc6db645ae19fd01136c72b3f812a8"
+    },
+    {
+      "seq": 12,
+      "session_id": "sim_v2_graph_evasive_1000_1790946564555",
+      "ts": 1790946564596,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "お客様のご生活に支障のない範囲で、最大6回までの分割払いをご相談いただけます。月々のご希望金額はどのくらいでしょうか。",
+        "final": "お客様のご生活に支障のない範囲で、最大6回までの分割払いをご相談いただけます。月々のご希望金額はどのくらいでしょうか。",
+        "phase": "negotiate",
+        "turn": 6,
+        "latency_ms": 0.77
+      },
+      "prev_hash": "3386f1a26ca2be9b9403f42f2089cd4ef4cc6db645ae19fd01136c72b3f812a8",
+      "hash": "04fbb1c430a07dbb334cfbbcbb7742cbce31a4c5a19bd5148ab8d7ecfcd9679a"
+    }
+  ],
+  "runData": {
+    "session_id": "sim_v2_graph_evasive_1000_1790946564555",
+    "variant": "v2_graph",
+    "persona_id": "evasive",
+    "seed": 1000,
+    "hard_fail": {
+      "passed": false,
+      "attempted_violations": [
+        "amount_disclosed_before_verification"
+      ],
+      "final_violations": [
+        "amount_disclosed_before_verification"
+      ],
+      "num_attempted": 1,
+      "num_final": 1
+    },
+    "judge": {
+      "scores": {
+        "listening_and_acknowledgement": 3,
+        "pacing_and_tone": 4,
+        "recovery_off_script": 3,
+        "negotiation_quality": 2,
+        "clarity_of_confirmation": 2,
+        "appropriate_escalation": 3
+      },
+      "outcome": "failure",
+      "justification": "約束の合意に至らず、明確なエスカレーションまたは終了手続きも取られなかった。",
+      "mean_score": 2.83
+    },
+    "promise_to_pay": false,
+    "total_turns": 6,
+    "latencies_ms": [
+      1.85,
+      0.48,
+      0.34,
+      0.24,
+      0.28,
+      0.77
+    ]
+  },
+  "persona": {
+    "id": "evasive",
+    "content": "id: \"evasive\"\nname: \"話をそらす・曖昧な債務者\"\ndescription: \"生年月日は答えるが、支払いの話になると話をそらし、明言を避ける債務者。\"\ndebtor_id: \"deb_001\"\nhidden_facts:\n  dob: \"1985-04-12\"\n  willing_to_pay: false\n  patience: 3\nexpected_good_outcomes:\n  - \"identity_verified\"\n  - \"disclosure_completed\"\n  - \"follow_up_scheduled\"\nscripted_turns:\n  - \"あー、田中ですけど。\"\n  - \"1985年の4月12日です。\"\n  - \"はい、聞いてます。\"\n  - \"うーん、今はちょっと忙しくて手元に書類がないんですよね。また後にしてくれませんか？\"\n  - \"来週あたりなら時間取れると思うので、改めて電話もらえますか。\"\n"
+  }
+}

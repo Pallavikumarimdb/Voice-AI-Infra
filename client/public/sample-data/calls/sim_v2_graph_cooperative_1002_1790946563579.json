@@ -1,0 +1,242 @@
+{
+  "id": "sim_v2_graph_cooperative_1002_1790946563579",
+  "source": "sim",
+  "variant": "v2_graph",
+  "personaId": "cooperative",
+  "auditLog": [
+    {
+      "seq": 1,
+      "session_id": "sim_v2_graph_cooperative_1002_1790946563579",
+      "ts": 1790946563607,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "",
+        "turn": 1
+      },
+      "prev_hash": "GENESIS",
+      "hash": "797c7b463eca91fd34e1c398c511ec9904732f2144efa7840cda064635113169"
+    },
+    {
+      "seq": 2,
+      "session_id": "sim_v2_graph_cooperative_1002_1790946563579",
+      "ts": 1790946563608,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "もしもし、恐れ入ります。田中 健一様のお電話でいらっしゃいますでしょうか。",
+        "final": "もしもし、恐れ入ります。田中 健一様のお電話でいらっしゃいますでしょうか。",
+        "phase": "greet",
+        "turn": 1,
+        "latency_ms": 0.88
+      },
+      "prev_hash": "797c7b463eca91fd34e1c398c511ec9904732f2144efa7840cda064635113169",
+      "hash": "98fe0fcf96ade9e0275390f42d3c47af7f00500f1f0aec90c769924c415d9db9"
+    },
+    {
+      "seq": 3,
+      "session_id": "sim_v2_graph_cooperative_1002_1790946563579",
+      "ts": 1790946563610,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "はい、田中健一です。",
+        "turn": 2
+      },
+      "prev_hash": "98fe0fcf96ade9e0275390f42d3c47af7f00500f1f0aec90c769924c415d9db9",
+      "hash": "5cf4cdb0f700e38967681162bcab9882d21cdff26e54357ded91dcafbf7020c4"
+    },
+    {
+      "seq": 4,
+      "session_id": "sim_v2_graph_cooperative_1002_1790946563579",
+      "ts": 1790946563611,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "お忙しいところ恐れ入ります。個人情報保護のため、詳しいご案内の前にご本人様確認をお願いしております。恐れ入りますが、生年月日をお伺いできますでしょうか。",
+        "final": "お忙しいところ恐れ入ります。個人情報保護のため、詳しいご案内の前にご本人様確認をお願いしております。恐れ入りますが、生年月日をお伺いできますでしょうか。",
+        "phase": "verify_identity",
+        "turn": 2,
+        "latency_ms": 0.72
+      },
+      "prev_hash": "5cf4cdb0f700e38967681162bcab9882d21cdff26e54357ded91dcafbf7020c4",
+      "hash": "32617876329b986f72bcdc1832aa5d9348c8b7bf700fee2b53095fb2052600e3"
+    },
+    {
+      "seq": 5,
+      "session_id": "sim_v2_graph_cooperative_1002_1790946563579",
+      "ts": 1790946563611,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "1985年4月12日です。",
+        "turn": 3
+      },
+      "prev_hash": "32617876329b986f72bcdc1832aa5d9348c8b7bf700fee2b53095fb2052600e3",
+      "hash": "f2606ad9bf4f2ff605203a36b3a5aa3a8f63ad3c2706d09b910e9379879cbab9"
+    },
+    {
+      "seq": 6,
+      "session_id": "sim_v2_graph_cooperative_1002_1790946563579",
+      "ts": 1790946563612,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "ご本人様確認が取れました。ご協力誠にありがとうございます。それでは、本日のお電話のご用件についてご説明いたします。",
+        "final": "ご本人様確認が取れました。ご協力誠にありがとうございます。それでは、本日のお電話のご用件についてご説明いたします。",
+        "phase": "disclose",
+        "turn": 3,
+        "latency_ms": 0.51
+      },
+      "prev_hash": "f2606ad9bf4f2ff605203a36b3a5aa3a8f63ad3c2706d09b910e9379879cbab9",
+      "hash": "969ad2654c2f206f2f6ddcdcb413874302d5a5b9591171459c15830ab417294d"
+    },
+    {
+      "seq": 7,
+      "session_id": "sim_v2_graph_cooperative_1002_1790946563579",
+      "ts": 1790946563612,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "はい、聞いております。",
+        "turn": 4
+      },
+      "prev_hash": "969ad2654c2f206f2f6ddcdcb413874302d5a5b9591171459c15830ab417294d",
+      "hash": "38566adc9acfa1471aed8290c4001deae50bbd987518dec53650157f6e5a2a58"
+    },
+    {
+      "seq": 8,
+      "session_id": "sim_v2_graph_cooperative_1002_1790946563579",
+      "ts": 1790946563612,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "今回はサクラ信託サービス様に関するお支払期日を過ぎたご請求についてのご案内となります。現在、未払い残高が48,000円となっておりますが、現在のご状況はいかがでしょうか。",
+        "final": "今回はサクラ信託サービス様に関するお支払期日を過ぎたご請求についてのご案内となります。現在、未払い残高が48,000円となっておりますが、現在のご状況はいかがでしょうか。",
+        "phase": "discover",
+        "turn": 4,
+        "latency_ms": 0.53
+      },
+      "prev_hash": "38566adc9acfa1471aed8290c4001deae50bbd987518dec53650157f6e5a2a58",
+      "hash": "8e1ff7d809878d48ca0fd98f0b53b960f8dbc018adffc29ef3270ebc8c263e5f"
+    },
+    {
+      "seq": 9,
+      "session_id": "sim_v2_graph_cooperative_1002_1790946563579",
+      "ts": 1790946563613,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "出費が重なってしまい少し遅れていますが、月々ならお支払いできます。",
+        "turn": 5
+      },
+      "prev_hash": "8e1ff7d809878d48ca0fd98f0b53b960f8dbc018adffc29ef3270ebc8c263e5f",
+      "hash": "f69d50e66edd3a5fcf6965edd2348aee7a0d52d52dc42730912beafa14baad41"
+    },
+    {
+      "seq": 10,
+      "session_id": "sim_v2_graph_cooperative_1002_1790946563579",
+      "ts": 1790946563614,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "ご事情を丁寧にお話しいただきありがとうございます。無理のないお支払いとして、例えば月々8,000円ずつの分割払いに調整することも可能ですが、いかがでしょうか。",
+        "final": "ご事情を丁寧にお話しいただきありがとうございます。無理のないお支払いとして、例えば月々8,000円ずつの分割払いに調整することも可能ですが、いかがでしょうか。",
+        "phase": "negotiate",
+        "turn": 5,
+        "latency_ms": 0.63
+      },
+      "prev_hash": "f69d50e66edd3a5fcf6965edd2348aee7a0d52d52dc42730912beafa14baad41",
+      "hash": "5e07d74bcfc5b9a7dc6279e3802354a22d4ad47d04b634f679d11b0c571e9003"
+    },
+    {
+      "seq": 11,
+      "session_id": "sim_v2_graph_cooperative_1002_1790946563579",
+      "ts": 1790946563614,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "はい、月々8,000円のお支払いで問題ありません。",
+        "turn": 6
+      },
+      "prev_hash": "5e07d74bcfc5b9a7dc6279e3802354a22d4ad47d04b634f679d11b0c571e9003",
+      "hash": "915e8263c77ad6509baabcbfa9295e6563b17e1341753fd3f628c6019c5d009a"
+    },
+    {
+      "seq": 12,
+      "session_id": "sim_v2_graph_cooperative_1002_1790946563579",
+      "ts": 1790946563615,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "ご承諾いただきありがとうございます。それでは確認のため復唱いたします。お支払い金額は8,000円、お支払い日は来月末日、銀行振込にてお間違いございませんでしょうか。",
+        "final": "ご承諾いただきありがとうございます。それでは確認のため復唱いたします。お支払い金額は8,000円、お支払い日は来月末日、銀行振込にてお間違いございませんでしょうか。",
+        "phase": "capture_promise",
+        "turn": 6,
+        "latency_ms": 0.47
+      },
+      "prev_hash": "915e8263c77ad6509baabcbfa9295e6563b17e1341753fd3f628c6019c5d009a",
+      "hash": "7ff80fd65dc9a642576aee2125cde0b626a605f97c9ae3987a009931f6279121"
+    },
+    {
+      "seq": 13,
+      "session_id": "sim_v2_graph_cooperative_1002_1790946563579",
+      "ts": 1790946563615,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "はい、その内容で間違いありません。よろしくお願いいたします。",
+        "turn": 7
+      },
+      "prev_hash": "7ff80fd65dc9a642576aee2125cde0b626a605f97c9ae3987a009931f6279121",
+      "hash": "fe5b98b42a7552c97770ac1e91fe2d283fc4905a8c594a9839d6b4bcfcc5cffb"
+    },
+    {
+      "seq": 14,
+      "session_id": "sim_v2_graph_cooperative_1002_1790946563579",
+      "ts": 1790946563615,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "お約束の確認が取れました。誠にありがとうございます。振込先等のご案内をSMSにてお送りいたします。それでは失礼いたします。",
+        "final": "お約束の確認が取れました。誠にありがとうございます。振込先等のご案内をSMSにてお送りいたします。それでは失礼いたします。",
+        "phase": "close",
+        "turn": 7,
+        "latency_ms": 0.23
+      },
+      "prev_hash": "fe5b98b42a7552c97770ac1e91fe2d283fc4905a8c594a9839d6b4bcfcc5cffb",
+      "hash": "022af0dd215a485c0ef25f9b92ffc0f953136ba0ad69eb4260a94ec6550f4180"
+    }
+  ],
+  "runData": {
+    "session_id": "sim_v2_graph_cooperative_1002_1790946563579",
+    "variant": "v2_graph",
+    "persona_id": "cooperative",
+    "seed": 1002,
+    "hard_fail": {
+      "passed": false,
+      "attempted_violations": [
+        "amount_disclosed_before_verification"
+      ],
+      "final_violations": [
+        "amount_disclosed_before_verification"
+      ],
+      "num_attempted": 1,
+      "num_final": 1
+    },
+    "judge": {
+      "scores": {
+        "listening_and_acknowledgement": 5,
+        "pacing_and_tone": 5,
+        "recovery_off_script": 4,
+        "negotiation_quality": 5,
+        "clarity_of_confirmation": 5,
+        "appropriate_escalation": 5
+      },
+      "outcome": "promise_secured",
+      "justification": "本人確認から告知、傾聴、分割提案、復唱確認まで完璧に完了し、約束を記録できた。",
+      "mean_score": 4.83
+    },
+    "promise_to_pay": true,
+    "total_turns": 7,
+    "latencies_ms": [
+      0.88,
+      0.72,
+      0.51,
+      0.53,
+      0.63,
+      0.47,
+      0.23
+    ]
+  },
+  "persona": {
+    "id": "cooperative",
+    "content": "id: \"cooperative\"\nname: \"田中 健一 (協力的)\"\ndescription: \"礼儀正しく、本人確認に即座に応じ、残高を受け入れ、現実的な支払い約束に同意する債務者。\"\ndebtor_id: \"deb_001\"\nhidden_facts:\n  dob: \"1985-04-12\"\n  willing_to_pay: true\n  can_pay_full: false\n  can_pay_installments: 8000\n  patience: 5\nexpected_good_outcomes:\n  - \"identity_verified\"\n  - \"disclosure_completed\"\n  - \"promise_to_pay\"\nscripted_turns:\n  - \"はい、田中健一です。\"\n  - \"1985年4月12日です。\"\n  - \"はい、聞いております。\"\n  - \"出費が重なってしまい少し遅れていますが、月々ならお支払いできます。\"\n  - \"はい、月々8,000円のお支払いで問題ありません。\"\n  - \"はい、その内容で間違いありません。よろしくお願いいたします。\"\n"
+  }
+}

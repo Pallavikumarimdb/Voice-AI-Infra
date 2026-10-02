@@ -1,0 +1,244 @@
+{
+  "id": "sim_v2_graph_hardship_1002_1790946565103",
+  "source": "sim",
+  "variant": "v2_graph",
+  "personaId": "hardship",
+  "auditLog": [
+    {
+      "seq": 1,
+      "session_id": "sim_v2_graph_hardship_1002_1790946565103",
+      "ts": 1790946565128,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "",
+        "turn": 1
+      },
+      "prev_hash": "GENESIS",
+      "hash": "a4a220e316a463ad439e35cbc4b0d54608e04365bd4b6a25e50862e9335c861b"
+    },
+    {
+      "seq": 2,
+      "session_id": "sim_v2_graph_hardship_1002_1790946565103",
+      "ts": 1790946565128,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "もしもし、恐れ入ります。田中 健一様のお電話でいらっしゃいますでしょうか。",
+        "final": "もしもし、恐れ入ります。田中 健一様のお電話でいらっしゃいますでしょうか。",
+        "phase": "greet",
+        "turn": 1,
+        "latency_ms": 0.6
+      },
+      "prev_hash": "a4a220e316a463ad439e35cbc4b0d54608e04365bd4b6a25e50862e9335c861b",
+      "hash": "92d0962653f9aed6fc9f23988a576058fd86af8ab8a659fe6365fc4c2e71effd"
+    },
+    {
+      "seq": 3,
+      "session_id": "sim_v2_graph_hardship_1002_1790946565103",
+      "ts": 1790946565130,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "はい、田中です。",
+        "turn": 2
+      },
+      "prev_hash": "92d0962653f9aed6fc9f23988a576058fd86af8ab8a659fe6365fc4c2e71effd",
+      "hash": "e2793f2db70de3e630d2908c48b40294c67e594060231b18d5f514c01901cc9b"
+    },
+    {
+      "seq": 4,
+      "session_id": "sim_v2_graph_hardship_1002_1790946565103",
+      "ts": 1790946565130,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "お忙しいところ恐れ入ります。個人情報保護のため、詳しいご案内の前にご本人様確認をお願いしております。恐れ入りますが、生年月日をお伺いできますでしょうか。",
+        "final": "お忙しいところ恐れ入ります。個人情報保護のため、詳しいご案内の前にご本人様確認をお願いしております。恐れ入りますが、生年月日をお伺いできますでしょうか。",
+        "phase": "verify_identity",
+        "turn": 2,
+        "latency_ms": 0.38
+      },
+      "prev_hash": "e2793f2db70de3e630d2908c48b40294c67e594060231b18d5f514c01901cc9b",
+      "hash": "fb38d5179e8630251263ca71ee18f8be97bded6459ca7f430ce93e0a701b5df5"
+    },
+    {
+      "seq": 5,
+      "session_id": "sim_v2_graph_hardship_1002_1790946565103",
+      "ts": 1790946565130,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "昭和60年4月12日です。",
+        "turn": 3
+      },
+      "prev_hash": "fb38d5179e8630251263ca71ee18f8be97bded6459ca7f430ce93e0a701b5df5",
+      "hash": "c6ad61cfd6c2a985ccf69deba5be7afd9704bd204cb3ced57d955c8e2bb502b9"
+    },
+    {
+      "seq": 6,
+      "session_id": "sim_v2_graph_hardship_1002_1790946565103",
+      "ts": 1790946565131,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "ご本人様確認が取れました。ご協力誠にありがとうございます。それでは、本日のお電話のご用件についてご説明いたします。",
+        "final": "ご本人様確認が取れました。ご協力誠にありがとうございます。それでは、本日のお電話のご用件についてご説明いたします。",
+        "phase": "disclose",
+        "turn": 3,
+        "latency_ms": 0.37
+      },
+      "prev_hash": "c6ad61cfd6c2a985ccf69deba5be7afd9704bd204cb3ced57d955c8e2bb502b9",
+      "hash": "4d1599d052c84c34cb45dfdced10f8cdcf412ec24b414bdce3cdc6101bee0b7d"
+    },
+    {
+      "seq": 7,
+      "session_id": "sim_v2_graph_hardship_1002_1790946565103",
+      "ts": 1790946565131,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "はい、伺います。",
+        "turn": 4
+      },
+      "prev_hash": "4d1599d052c84c34cb45dfdced10f8cdcf412ec24b414bdce3cdc6101bee0b7d",
+      "hash": "6bd41b279feccd4cb73db2aed6acc47be9cb62aa9d78c35f5ff70866f92b269c"
+    },
+    {
+      "seq": 8,
+      "session_id": "sim_v2_graph_hardship_1002_1790946565103",
+      "ts": 1790946565131,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "今回はサクラ信託サービス様に関するお支払期日を過ぎたご請求についてのご案内となります。現在、未払い残高が48,000円となっておりますが、現在のご状況はいかがでしょうか。",
+        "final": "今回はサクラ信託サービス様に関するお支払期日を過ぎたご請求についてのご案内となります。現在、未払い残高が48,000円となっておりますが、現在のご状況はいかがでしょうか。",
+        "phase": "discover",
+        "turn": 4,
+        "latency_ms": 0.31
+      },
+      "prev_hash": "6bd41b279feccd4cb73db2aed6acc47be9cb62aa9d78c35f5ff70866f92b269c",
+      "hash": "944bca15a5a6ef5ac4bebea63e55bd33c8f309636b70af7d41f8464df6a844de"
+    },
+    {
+      "seq": 9,
+      "session_id": "sim_v2_graph_hardship_1002_1790946565103",
+      "ts": 1790946565132,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "実は先月体調を崩して退職してしまい、現在生活が非常に苦しく、まとまったお金が払えません。",
+        "turn": 5
+      },
+      "prev_hash": "944bca15a5a6ef5ac4bebea63e55bd33c8f309636b70af7d41f8464df6a844de",
+      "hash": "9e7c7da2eecd732734b9cd973a86f20bd85bf977564032231a63b3ff4cb3dc15"
+    },
+    {
+      "seq": 10,
+      "session_id": "sim_v2_graph_hardship_1002_1790946565103",
+      "ts": 1790946565132,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "ご事情を丁寧にお話しいただきありがとうございます。無理のないお支払いとして、例えば月々8,000円ずつの分割払いに調整することも可能ですが、いかがでしょうか。",
+        "final": "ご事情を丁寧にお話しいただきありがとうございます。無理のないお支払いとして、例えば月々8,000円ずつの分割払いに調整することも可能ですが、いかがでしょうか。",
+        "phase": "negotiate",
+        "turn": 5,
+        "latency_ms": 0.39
+      },
+      "prev_hash": "9e7c7da2eecd732734b9cd973a86f20bd85bf977564032231a63b3ff4cb3dc15",
+      "hash": "35241a90d2fc52ebae30729c9ac5ee1a37d1b97de00f6cdde2107fb5d550ecd7"
+    },
+    {
+      "seq": 11,
+      "session_id": "sim_v2_graph_hardship_1002_1790946565103",
+      "ts": 1790946565132,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "月々5,000円くらいでしたら、なんとかお支払いできるのですが、それでも大丈夫でしょうか。",
+        "turn": 6
+      },
+      "prev_hash": "35241a90d2fc52ebae30729c9ac5ee1a37d1b97de00f6cdde2107fb5d550ecd7",
+      "hash": "574eeaad84a86226a25d1a5a25313babb3382ebb23081487c46a0abc62fdf8c8"
+    },
+    {
+      "seq": 12,
+      "session_id": "sim_v2_graph_hardship_1002_1790946565103",
+      "ts": 1790946565133,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "ご提示ありがとうございます。それでは、初回5,000円のお支払いということで、お間違いございませんでしょうか。",
+        "final": "ご提示ありがとうございます。それでは、初回5,000円のお支払いということで、お間違いございませんでしょうか。",
+        "phase": "capture_promise",
+        "turn": 6,
+        "latency_ms": 0.43
+      },
+      "prev_hash": "574eeaad84a86226a25d1a5a25313babb3382ebb23081487c46a0abc62fdf8c8",
+      "hash": "bd3f4ec16e236cadcf82a46acb359d5c045fd21a1baf178f8fd12ac8f2617c10"
+    },
+    {
+      "seq": 13,
+      "session_id": "sim_v2_graph_hardship_1002_1790946565103",
+      "ts": 1790946565133,
+      "stage": "user_utterance",
+      "payload": {
+        "text": "はい、月々5,000円で間違いありません。本当に助かります。",
+        "turn": 7
+      },
+      "prev_hash": "bd3f4ec16e236cadcf82a46acb359d5c045fd21a1baf178f8fd12ac8f2617c10",
+      "hash": "4b773be8490ba1028472433ce14d75178f5762280b9adedf0c0d33225cd290ef"
+    },
+    {
+      "seq": 14,
+      "session_id": "sim_v2_graph_hardship_1002_1790946565103",
+      "ts": 1790946565133,
+      "stage": "agent_utterance",
+      "payload": {
+        "attempted": "お約束の確認が取れました。誠にありがとうございます。振込先等のご案内をSMSにてお送りいたします。それでは失礼いたします。",
+        "final": "お約束の確認が取れました。誠にありがとうございます。振込先等のご案内をSMSにてお送りいたします。それでは失礼いたします。",
+        "phase": "close",
+        "turn": 7,
+        "latency_ms": 0.37
+      },
+      "prev_hash": "4b773be8490ba1028472433ce14d75178f5762280b9adedf0c0d33225cd290ef",
+      "hash": "cdb188d652eefb2cba9e7f5cd3f01ef2e5ef035a35df20da51920e7e88e3d90f"
+    }
+  ],
+  "runData": {
+    "session_id": "sim_v2_graph_hardship_1002_1790946565103",
+    "variant": "v2_graph",
+    "persona_id": "hardship",
+    "seed": 1002,
+    "hard_fail": {
+      "passed": false,
+      "attempted_violations": [
+        "amount_disclosed_before_verification",
+        "third_party_amount_disclosure"
+      ],
+      "final_violations": [
+        "amount_disclosed_before_verification",
+        "third_party_amount_disclosure"
+      ],
+      "num_attempted": 2,
+      "num_final": 2
+    },
+    "judge": {
+      "scores": {
+        "listening_and_acknowledgement": 5,
+        "pacing_and_tone": 5,
+        "recovery_off_script": 4,
+        "negotiation_quality": 5,
+        "clarity_of_confirmation": 5,
+        "appropriate_escalation": 5
+      },
+      "outcome": "promise_secured",
+      "justification": "本人確認から告知、傾聴、分割提案、復唱確認まで完璧に完了し、約束を記録できた。",
+      "mean_score": 4.83
+    },
+    "promise_to_pay": true,
+    "total_turns": 7,
+    "latencies_ms": [
+      0.6,
+      0.38,
+      0.37,
+      0.31,
+      0.39,
+      0.43,
+      0.37
+    ]
+  },
+  "persona": {
+    "id": "hardship",
+    "content": "id: \"hardship\"\nname: \"経済的困窮（生活苦・失業）\"\ndescription: \"病気や失業で今すぐの一括支払いができず、少額の分割払いを希望する債務者。\"\ndebtor_id: \"deb_001\"\nhidden_facts:\n  dob: \"1985-04-12\"\n  willing_to_pay: true\n  can_pay_full: false\n  can_pay_installments: 5000\n  patience: 4\nexpected_good_outcomes:\n  - \"identity_verified\"\n  - \"disclosure_completed\"\n  - \"hardship_detected\"\n  - \"promise_to_pay\"\nscripted_turns:\n  - \"はい、田中です。\"\n  - \"昭和60年4月12日です。\"\n  - \"はい、伺います。\"\n  - \"実は先月体調を崩して退職してしまい、現在生活が非常に苦しく、まとまったお金が払えません。\"\n  - \"月々5,000円くらいでしたら、なんとかお支払いできるのですが、それでも大丈夫でしょうか。\"\n  - \"はい、月々5,000円で間違いありません。本当に助かります。\"\n"
+  }
+}
