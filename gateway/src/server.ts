@@ -6,6 +6,7 @@ import { forwardAudioFrame } from './backpressure';
 import { createSTTConnection, STTMessage } from './routes/sttClient';
 import { MTClient } from './routes/mtClient';
 import { AgentClient } from './routes/agentClient';
+import { TTSClient } from './routes/ttsClient';
 import { metrics } from './metrics';
 
 dotenv.config();
@@ -16,10 +17,12 @@ const DEFAULT_MODE = (process.env.GATEWAY_MODE || process.env.MODE || 'translate
 const STT_URL = process.env.STT_SERVICE_URL || 'ws://localhost:8001/stream';
 const MT_URL = process.env.MT_SERVICE_URL || 'http://localhost:8002/translate';
 const AGENT_URL = process.env.AGENT_SERVICE_URL || 'http://localhost:8003/turn';
+const TTS_URL = process.env.TTS_SERVICE_URL || 'http://localhost:8004/synthesize';
 
 const sessionManager = new SessionManager();
 const mtClient = new MTClient(MT_URL);
 const agentClient = new AgentClient(AGENT_URL);
+const ttsClient = new TTSClient(TTS_URL);
 
 // HTTP Server for metrics and health
 const server = http.createServer(async (req, res) => {
@@ -81,6 +84,20 @@ wss.on('connection', (clientWs: WebSocket) => {
             const latSec = (now - sttMsg.tCapture) / 1000;
             metrics.e2eLatency.observe({ boundary: 'capture_to_partial' }, latSec);
           }
+
+          // Barge-in check: If caller starts speaking while agent is speaking audio, interrupt
+          if (session.mode === 'agent' && session.isAgentSpeaking) {
+            console.log(`[Gateway] Barge-in detected during utterance ${session.currentSpeakingUttId}`);
+            session.currentTTSAbort?.abort();
+            session.isAgentSpeaking = false;
+            sendJson(clientWs, {
+              type: 'interrupt',
+              uttId: session.currentSpeakingUttId,
+              tInterrupt: now,
+              reason: 'caller_barge_in'
+            });
+          }
+
           sendJson(clientWs, { ...sttMsg, tEmit: now });
         } else if (sttMsg.type === 'final') {
           const tFinal = now;
@@ -124,6 +141,67 @@ wss.on('connection', (clientWs: WebSocket) => {
                   events: res.events,
                   metrics: res.metrics,
                   tEmit: tAgentDone,
+                });
+
+                if (res.metrics?.llmMs) {
+                  metrics.agentTurnLatency.observe({ stage: 'llm_fast' }, res.metrics.llmMs / 1000);
+                }
+                if (res.metrics?.tokensIn) {
+                  metrics.agentTokens.inc({ type: 'prompt' }, res.metrics.tokensIn);
+                }
+                if (res.metrics?.tokensOut) {
+                  metrics.agentTokens.inc({ type: 'completion' }, res.metrics.tokensOut);
+                }
+                if (res.events) {
+                  for (const ev of res.events) {
+                    if (ev.type === 'compliance_block') {
+                      metrics.agentComplianceBlocks.inc({ rule: ev.payload?.rule || 'unknown' });
+                    } else if (ev.type === 'escalate') {
+                      metrics.agentEscalations.inc({ reason: ev.payload?.reason || 'unknown' });
+                    }
+                  }
+                }
+
+                // Stream agent audio back to client via TTS
+                session.isAgentSpeaking = true;
+                session.currentSpeakingUttId = currentUttId;
+                session.currentTTSAbort = new AbortController();
+
+                sendJson(clientWs, {
+                  type: 'agent_speech_start',
+                  uttId: currentUttId,
+                  tStart: Date.now()
+                });
+                metrics.turnEndToAgentAudio.observe((Date.now() - tFinal) / 1000);
+
+                ttsClient.streamSynthesize(
+                  res.text,
+                  (chunkSeq, chunkBuf) => {
+                    if (session.isAgentSpeaking) {
+                      sendJson(clientWs, {
+                        type: 'agent_audio_chunk',
+                        uttId: currentUttId,
+                        seq: chunkSeq,
+                        pcm16Base64: chunkBuf.toString('base64'),
+                        tEmit: Date.now()
+                      });
+                    }
+                  },
+                  { abortSignal: session.currentTTSAbort.signal }
+                ).then(() => {
+                  if (session.isAgentSpeaking) {
+                    sendJson(clientWs, {
+                      type: 'agent_speech_end',
+                      uttId: currentUttId,
+                      tEnd: Date.now()
+                    });
+                    session.isAgentSpeaking = false;
+                  }
+                }).catch((ttsErr) => {
+                  if (ttsErr.name !== 'AbortError') {
+                    console.error(`[Gateway] TTS error for ${currentUttId}:`, ttsErr.message);
+                  }
+                  session.isAgentSpeaking = false;
                 });
               } else {
                 sendJson(clientWs, {

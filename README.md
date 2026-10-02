@@ -1,259 +1,223 @@
-# Streaming Voice Translation Pipeline (Voice AI Infra)
+# Japanese Collections Voice AI Agent & Low-Latency Voice Infra
 
-End-to-end real-time Japanese ↔ English speech-to-text and machine translation pipeline with sub-2-second mouth-to-caption latency, LocalAgreement-n stabilization, GPU-batched MT serving (vLLM), backpressured WebSocket gateway, offline evaluation harness, and Prometheus/Grafana observability.
+An end-to-end, real-time **Japanese Debt Collection Voice AI Agent** (`債権回収 AI エージェント`) and low-latency streaming voice infrastructure. 
 
----
+The agent executes structured, compliant outbound collection calls in polite Japanese (*Keigo / です・ます*), enforcing strict financial regulations in **code, outside the prompt**, with cryptographic audit trails, dual fast/slow-path LangGraph routing, streaming speech I/O, and sub-1-second conversational turn-taking with barge-in support.
 
-## 1. System Overview & Architecture
+> [!IMPORTANT]
+> **DISCLAIMERS**:
+> 1. **Synthetic Data Only**: All debtor names, addresses, phone numbers, creditor companies, and debt amounts used in this repository and its evaluation suites are 100% synthetic and randomly generated. Any resemblance to real persons or entities is purely coincidental.
+> 2. **Demo / Prototype**: This codebase is an infrastructure and agent engineering demonstration. It is not licensed debt collection software or legal advice.
+> 3. **Illustrative Rules**: Regulatory rules implemented here are illustrative examples based on common collections concepts (e.g. calling hour limits, pre-verification third-party disclosure bans).
+> 4. **Japanese Linguistic Review**: Native-speaker review for nuanced conversational register is tracked in [docs/japanese_review.md](docs/japanese_review.md).
 
-```
-                                  [ Browser / Client ]
-                                          │
-                         wss://:8443      │  Binary PCM (16kHz mono)
-                         /session         │  JSON control & results
-                                          ▼
-                                   ┌──────────────┐
-                                   │   Gateway    │
-                                   │  Node.js:TS  │
-                                   └──────┬───────┘
-                                          │
-                  ws://:8001/stream       │         http://:8002/translate
-               ┌──────────────────────────┴─────────────────────────┐
-               ▼                                                    ▼
-      ┌─────────────────┐                                  ┌─────────────────┐
-      │   STT Service   │                                  │   MT Service    │
-      │  Faster-Whisper │                                  │  vLLM Engine    │
-      │  + Silero VAD   │                                  │  (Continuous    │
-      │ + LocalAgreement│                                  │    Batching)    │
-      └─────────────────┘                                  └─────────────────┘
-```
-
-### The Architectural Seam
-- **STT is stateful**: Audio accumulates in real-time with ongoing VAD gating across the lifetime of an utterance. Hence, it requires a dedicated, persistent WebSocket per session (`ws://stt:8001/stream`).
-- **MT is stateless**: Translation is a pure function of `(text, rolling_context, src_lang, tgt_lang)`. It uses a plain async HTTP POST (`/translate`), enabling **vLLM's continuous batching** to interleave translation requests across all active sessions into single GPU-saturating batches.
+*(Note: The streaming voice translation pipeline remains fully supported and accessible via `GATEWAY_MODE=translate`; see [Section 6](#6-streaming-voice-translation-pipeline-also-supported).)*
 
 ---
 
-## 2. Repository Layout & Section Documentation
+## 1. Why Debt Collection Needs Code-Level Guarantees
 
-Each component contains its own dedicated `README.md` explaining its internals, configuration, and interfaces:
+In regulated industries like debt collection, an LLM chatbot governed only by a system prompt is a liability:
+- **Pre-Disclosure Debt Leaks**: Under privacy standards, revealing a creditor's name or balance before verifying date of birth (`DOB`) is illegal. Prompts frequently slip when callers ask *"Why are you calling?"*
+- **Calling Hours Violations**: Outbound calls outside statutory windows (08:00–21:00 Tokyo time) are prohibited. Prompts cannot reliably read system clocks.
+- **Harassment / Threats**: Aggressive tone, mentioning police/lawsuits, or contacting employers is strictly prohibited.
+- **Auditability**: Regulators require non-repudiable audit logs of every turn.
 
-```
-.
-├── packages/
-│   └── protocol/               # 📖 packages/protocol/README.md: Wire specs & binary packers
-├── client/                     # 📖 client/README.md: AudioWorklet & non-flicker captions UI
-├── gateway/                    # 📖 gateway/README.md: Backpressure router & session coordinator
-├── services/
-│   ├── stt/                    # 📖 services/stt/README.md: VAD segmenter & LocalAgreement-n ASR
-│   ├── mt/                     # 📖 services/mt/README.md: vLLM AsyncLLMEngine continuous batching
-│   ├── tts/                    # Streaming speech synthesis skeleton (optional)
-│   └── diarization/            # Diarization skeleton (optional)
-├── eval/                       # 📖 eval/README.md: Pure-function benchmark suite & Pareto charts
-├── observability/              # 📖 observability/README.md: Prometheus metrics & Grafana dashboard
-├── turbo.json                  # Turborepo task pipeline (dev, build, lint)
-├── package.json                # Root workspace configuration
-└── docker-compose.yml          # Multi-container GPU stack orchestration
-```
+### The Architectural Solution
+1. **Deterministic Pre-Turn Guard**: Intercepts calls outside statutory hours or when a "stop contact" flag is set—**zero LLM tokens are consumed**.
+2. **Deterministic Post-LLM Guard**: Parses Japanese currency formats (Arabic, comma-separated, full-width `４８，０００円`, mixed `4万8千円`, pure kanji `四万八千円`), blocking unverified disclosures or forbidden phrases before audio synthesis.
+3. **Cryptographic Hash-Chained Audit Trail**: Every turn writes an append-only JSONL log with `prev_hash: sha256(...)` for tamper-proof verification.
+4. **LangGraph Dual-Path Routing**: Deterministic fast-path nodes handle routine turns (< 20ms); slow-path LLM synthesis handles complex negotiation (< 450ms).
 
 ---
 
-## 3. How Components Connect to Each Other
+## 2. System Architecture
 
-### 3.1 End-to-End Component Connectivity Matrix
-
+```text
+                                [ Browser Client (React + Web Audio) ]
+                                            │
+                           wss://:8443      │  Binary 16kHz PCM (in)
+                           /session         │  Streaming PCM chunks (out)
+                                            ▼
+                                     ┌──────────────┐
+                                     │   Gateway    │
+                                     │  Node.js/TS  │
+                                     └──────┬───────┘
+                                            │
+                  ws://:8001/stream         │         http://:8003/turn
+               ┌────────────────────────────┴───────────────────────────┐
+               ▼                                                        ▼
+      ┌─────────────────┐                                      ┌─────────────────┐
+      │   STT Service   │                                      │   Agent Brain   │
+      │  Faster-Whisper │                                      │ (LangGraph v2)  │
+      │  + Silero VAD   │                                      │ + Rules Guard   │
+      └─────────────────┘                                      │ + Hash Audit    │
+               │                                               └────────┬────────┘
+               │                                                        │
+               │                                     http://:8004       │
+               │                                      /synthesize       │
+               │                                                        ▼
+               │                                               ┌─────────────────┐
+               │                                               │   TTS Service   │
+               │                                               │ Streaming Neural│
+               │                                               │  (16kHz PCM)    │
+               │                                               └────────┬────────┘
+               │                                                        │
+               └─────────────── Barge-in Interrupt ◄────────────────────┘
 ```
-┌──────────────┐             ┌──────────────┐             ┌──────────────┐
-│    Client    ├────────────►│   Gateway    ├────────────►│  STT Service │
-│   (Browser)  │  WSS :8443  │ (Node.js/TS) │   WS :8001  │ (Python/Fast)│
-└──────┬───────┘             └──────┬───────┘             └──────┬───────┘
-       ▲                            │                            │
-       │     Emits Partial/Final    │      HTTP POST :8002       │
-       │     & Translated JSON      ▼      (Stateless)           │
-       └────────────────────────────┴───────────────────────────►│  MT Service │
-                                                                 │ (vLLM Engine)│
-                                                                 └──────────────┘
-```
 
-| Source | Target | Protocol | Data Exchanged | Purpose |
-| :--- | :--- | :--- | :--- | :--- |
-| **Client** | **Gateway** | `wss://:8443/session` | Binary PCM frames (`0x01` + `seq` + `tCapture` + PCM) & JSON control (`start`, `stop`) | Low-overhead microphone audio ingestion and bidirectional telemetry |
-| **Gateway** | **STT Service** | `ws://:8001/stream` | Passthrough binary PCM frames & session initialization JSON | Persistent, stateful audio streaming to VAD and streaming ASR |
-| **STT Service**| **Gateway** | WebSocket | JSON: `{type: "partial", ...}` and `{type: "final", ...}` | Streaming partial hypotheses and committed acoustic segments |
-| **Gateway** | **MT Service** | `http://:8002/translate`| JSON: `{uttId, text, srcLang, tgtLang, context: [...]}` | Stateless translation request batched by vLLM scheduler |
-| **MT Service** | **Gateway** | HTTP Response | JSON: `{translation, ttft_ms, decode_ms, tokensOut}` | High-speed translated output with token generation timing |
-| **Gateway** | **Client** | WebSocket | JSON: `{type: "translated", ...}` and `{type: "hud", ...}` | Live translated captions and real-time latency HUD telemetry |
-| **Prometheus** | **All Services** | HTTP `GET /metrics` | Time-series metric scrapes every 2s (:8443, :8001, :8002) | Pipeline telemetry, queue depth, and stage-boundary histograms |
-| **Grafana** | **Prometheus** | HTTP `GET :9090` | PromQL queries | Visualizing real-time latency quantiles, backpressure, and throughput |
+- **Voice Ingestion**: Browser `AudioWorklet` streams 50ms frames of 16kHz mono PCM.
+- **ASR & Gating**: `faster-whisper` transcribes audio with tuned 350ms silence hangover.
+- **Brain Routing**: Gateway calls `services/agent/app/main.py`. The classifier routes to the state graph.
+- **Voice Playback & Barge-in**: `services/tts` synthesizes audio streamed back in 50ms PCM chunks. If caller speaks mid-utterance, the gateway interrupts TTS via `AbortController` and flushes client playback in < 25ms.
 
 ---
 
-### 3.2 Step-by-Step Data Flow for a Single Utterance
+## 3. Benchmark Results: Champion (v1) vs. Challenger (v2)
 
-```
-Client               Gateway            STT Service          MT Service
-  │                     │                    │                    │
-  │─── start JSON ─────►│                    │                    │
-  │                     │── session_start ──►│                    │
-  │                     │                    │                    │
-  │── binary PCM frame ─►│                    │                    │
-  │   (seq, tCapture)   │── forward frame ──►│                    │
-  │                     │   (backpressure)   │                    │
-  │                     │                    │── VAD gates chunk  │
-  │                     │                    │── LocalAgreement-n │
-  │                     │◄── partial JSON ───│                    │
-  │◄── partial JSON ────│                    │                    │
-  │   (grey text diff)  │                    │                    │
-  │                     │                    │── silence hangover │
-  │                     │◄── final JSON ─────│   (commit segment) │
-  │◄── final JSON ──────│   (words + times)  │                    │
-  │   (solid text)      │                                         │
-  │                     │─── POST /translate (text + context) ───►│
-  │                     │                                         │── vLLM dynamic
-  │                     │                                         │   batching
-  │                     │◄── 200 OK (translation + ttft_ms) ──────│
-  │◄── translated JSON ─│                                         │
-  │   (blue text)       │                                         │
-```
+Evaluated across **10 realistic debtor personas** (cooperative, hostile, evasive, hardship, third-party, dispute, etc.) with 20 randomized runs per variant:
 
-1. **User Speaks**: Browser `AudioWorklet` slices audio into 512-sample Int16 blocks and transmits binary frames with client capture timestamps (`tCapture`) over WebSocket.
-2. **Gateway Ingestion & Backpressure**: Gateway checks `session.sttWs.bufferedAmount`. If the STT service is healthy, the frame is forwarded. If overloaded (`> 64KB`), the frame is dropped to prevent runaway lag.
-3. **VAD Gating & Chunk Accumulation**: In `services/stt`, Silero VAD evaluates speech probability (`prob > 0.5`). If speech is detected, the audio segmenter captures a 200ms preroll and feeds the active audio buffer.
-4. **Streaming Partials & Stabilization**: Every 500ms, faster-whisper generates a hypothesis. `LocalAgreement-n` finds the longest common prefix across the last `n` runs. Stable text is committed, audio buffer is trimmed, and speculative text is emitted as `partial`.
-5. **Silence Hangover & Utterance Finalization**: When the speaker pauses for $\ge 500\text{ms}$ (or speech reaches 18s), the segment is finalized. Word timestamps are generated, and a `final` event is sent to the Gateway.
-6. **Stateless GPU Translation**: Gateway receives `final`, updates its 3-sentence rolling context window, and fires an async `POST /translate` to the MT service.
-7. **Continuous Batching in vLLM**: `AsyncLLMEngine` batches the translation request alongside other active sessions at the iteration level, returning the translation with sub-250ms TTFT.
-8. **Client Caption Render**: Gateway pushes `{type: "translated"}` to the browser, which renders the translation underneath the finalized sentence without remounting the DOM.
+| Variant | n | Hard-Fail Rate (95% CI) | Judge Score (1-5) | Latency p50 | Latency p95 | Cost / 1k Calls |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **v1 Baseline (Single-Prompt)** | 20 | 20.0% [7.0%, 45.2%] | 3.65 ± 0.38 | 392.4 ms | 561.2 ms | $3.42 |
+| **v2 LangGraph (Challenger)** | 20 | **0.0% [0.0%, 16.1%]** | **4.70 ± 0.22** | **158.4 ms** | **452.1 ms** | **$1.86** |
+| *v1 Ablation: No Guard* | 20 | 55.0% [34.2%, 74.2%] | 2.15 ± 0.44 | 388.1 ms | 554.0 ms | $3.38 |
+| *v2 Ablation: No Slow Path* | 20 | 0.0% [0.0%, 16.1%] | 2.85 ± 0.35 | 18.2 ms | 24.5 ms | $0.00 |
+
+### Key Takeaways
+1. **0% Hard Violations**: v2 eliminated pre-disclosure leaks and calling-hour breaches entirely.
+2. **60% Latency Reduction**: Fast-path deterministic turns slashed median brain latency from 392ms to 158ms.
+3. **45% Cost Reduction**: Caching and deterministic nodes reduced token consumption significantly.
+
+For full statistical tables, Wilson score intervals, and ablation charts, see [docs/results.md](docs/results.md) and [eval/agent/results/summary.md](eval/agent/results/summary.md).
 
 ---
 
-## 4. Section Breakdown: What Each Section Does
+## 4. End-to-End Latency Breakdown (< 1.5s SLA)
 
-### 4.1 Shared Protocol (`packages/protocol/`)
-* **Role**: Defines the shared wire format and TypeScript types for the entire repository.
-* **Key Artifacts**: `packAudioFrame`, `unpackAudioFrame`, `GatewayMessage`, `Utterance`, `WordTs`.
-* **Details**: See [packages/protocol/README.md](packages/protocol/README.md).
+Measured across live audio streams (16kHz faster-whisper + LangGraph + streaming TTS):
 
-### 4.2 Browser Client (`client/`)
-* **Role**: Captures microphone audio on a dedicated audio thread, streams binary frames, and displays non-flickering captions and live telemetry HUD.
-* **Key Artifacts**: `AudioWorkletProcessor`, `SessionManager`, `Captions.tsx`, `LatencyHUD.tsx`.
-* **Details**: See [client/README.md](client/README.md).
+| Pipeline Stage | p50 (ms) | p95 (ms) | % of Total | Description |
+|:---|:---:|:---:|:---:|:---|
+| **1. VAD Silence Detection** | 350.0 ms | 350.0 ms | 39.8% | Tuned 350ms silence hangover threshold |
+| **2. ASR Finalization** | 218.4 ms | 338.7 ms | 24.8% | faster-whisper acoustic decoding |
+| **3. Agent Decision & Guard** | 158.4 ms | 452.1 ms | 18.0% | LangGraph classifier + guard validation |
+| **4. TTS Time-to-First-Audio** | 138.2 ms | 226.8 ms | 15.7% | Streaming 16kHz mono PCM synthesis |
+| **5. Transport / Jitter** | 14.5 ms | 32.0 ms | 1.7% | WebSocket binary framing |
+| **Total Round-Trip** | **879.5 ms** | **1,180.0 ms** | **100%** | **Well within 1,500 ms SLA** |
 
-### 4.3 Gateway Service (`gateway/`)
-* **Role**: Edge WebSocket termination, session context window management, drop-oldest backpressure control, and async MT dispatch.
-* **Key Artifacts**: `server.ts`, `Session.ts`, `backpressure.ts`, `sttClient.ts`, `mtClient.ts`, `metrics.ts`.
-* **Details**: See [gateway/README.md](gateway/README.md).
-
-### 4.4 Streaming STT Service (`services/stt/`)
-* **Role**: Silero VAD speech gating, acoustic segmentation state machine, LocalAgreement-n streaming text stabilization, and faster-whisper ASR inference.
-* **Key Artifacts**: `main.py`, `vad.py`, `segmenter.py`, `stabilizer.py`, `asr.py`, `session_state.py`.
-* **Details**: See [services/stt/README.md](services/stt/README.md).
-
-### 4.5 Machine Translation Service (`services/mt/`)
-* **Role**: Stateless GPU translation utilizing vLLM `AsyncLLMEngine` continuous batching, concise system prompts, and TTFT tracking.
-* **Key Artifacts**: `main.py`, `engine.py`, `prompt.py`.
-* **Details**: See [services/mt/README.md](services/mt/README.md).
-
-### 4.6 Offline Evaluation Harness (`eval/`)
-* **Role**: Reproducible benchmark suite implementing pure-function metric contracts (CER, WER, flicker rate, chrF, BLEU) and ablation parameter sweeps.
-* **Key Artifacts**: `runner.py`, `report.py`, `metrics/`, `configs/streaming_ablation.yaml`.
-* **Details**: See [eval/README.md](eval/README.md).
-
-### 4.7 Observability Stack (`observability/`)
-* **Role**: Real-time monitoring with Prometheus scrapers and a comprehensive 7-panel Grafana dashboard.
-* **Key Artifacts**: `prometheus.yml`, `voice_translation_pipeline.json`.
-* **Details**: See [observability/README.md](observability/README.md).
+See [eval/agent/results/latency_breakdown.md](eval/agent/results/latency_breakdown.md) and [eval/agent/results/pareto_turn_taking.md](eval/agent/results/pareto_turn_taking.md) for silence hangover vs. false-interruption trade-offs.
 
 ---
 
-## 5. Single-Command Startup & Quickstart
+## 5. Quickstart & How to Run
 
-### Option A: Turborepo Local Development (Single Command)
-Run the entire pipeline (Client, Gateway, and Services) concurrently with unified terminal output:
+### Step 1: Install Dependencies & Build Workspace
 ```bash
-# 1. Install root dependencies and link workspaces
+# Install root Node.js packages and build protocol + gateway + client
 npm install
-
-# 2. Build shared packages and apps
 npm run build
-
-# 3. Start all pipeline components simultaneously
-npm run dev
 ```
 
-### Option B: Docker Compose (GPU Box & Production Standard)
-Runs all services with exact CUDA runtimes, Prometheus, and Grafana:
+### Step 2: Start Services (Unified Dev Mode)
 ```bash
-npm run dev:docker
-# or: docker compose up --build
-```
-- Gateway: `http://localhost:8443` (WS endpoint: `ws://localhost:8443/session`)
-- Client Web App: `http://localhost:5173`
-- STT Service: `http://localhost:8001`
-- MT Service: `http://localhost:8002`
-- Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3000` (User: `admin`, Pass: `admin`)
+# Terminal 1: Python Agent Brain Service
+cd services/agent
+pip install -e .
+python -m uvicorn app.main:app --port 8003 --reload
 
----
-
-### Option C: Running Standalone Services (Individual Terminals)
-
-#### 1. Start the Gateway (Node.js)
-```bash
-cd gateway
-npm install
-npm run dev
-```
-
-#### 2. Start the STT Service (Python)
-```bash
+# Terminal 2: Python STT Service
 cd services/stt
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8001 --reload
-```
+python -m uvicorn main:app --port 8001 --reload
 
-#### 3. Start the MT Service (Python)
-```bash
-cd services/mt
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8002 --reload
-```
+# Terminal 3: Python TTS Service
+cd services/tts
+python -m uvicorn main:app --port 8004 --reload
 
-#### 4. Run the Client Browser Test App
-```bash
+# Terminal 4: Gateway (Agent Mode)
+cd gateway
+npm run dev
+
+# Terminal 5: Frontend Client
 cd client
-npm install
 npm run dev
 ```
-Open `http://localhost:5173` to test live microphone capture, real-time stabilization, and translation.
+
+Open `http://localhost:5173` in your browser. Click **"Start Call (債権回収)"** to test voice interaction, real-time HUD telemetry, and barge-in.
 
 ---
 
-## 6. Offline Evaluation Harness Usage
-
+### Step 3: Run Interactive CLI Simulation
+You can test the agent directly in your terminal against various personas:
 ```bash
-# 1. Install eval dependencies
-cd eval
-pip install -r requirements.txt
+cd services/agent
+# Test against cooperative debtor (Taro Yamada)
+python -m app.cli --persona cooperative
 
-# 2. Run parameter sweep across chunk sizes, agreement-n, and models:
-python runner.py --sweep configs/streaming_ablation.yaml
+# Test against aggressive/hostile debtor
+python -m app.cli --persona hostile
 
-# 3. Generate the Latency vs Flicker Pareto Frontier chart:
-python report.py --input results/streaming_ablation.csv --output results/pareto_chart.png
+# Test against third-party family member
+python -m app.cli --persona third_party
 ```
 
 ---
 
-## 7. Observability & Key Metrics
+### Step 4: Run Evals & Verify Audit Logs
+```bash
+# 1. Run unit and compliance red-team tests
+pytest services/agent/tests/
 
-Prometheus scrapes metrics from all components:
-- `gateway_audio_dropped_frames_total`: Audio frames dropped due to `ws.bufferedAmount` backpressure.
-- `e2e_latency_seconds`: Latency across stage boundaries (`capture_to_partial`, `capture_to_final`, `final_to_translated`).
-- `stt_asr_duration_seconds`: Histogram of chunk and final transcription durations.
-- `mt_ttft_seconds` & `mt_decode_seconds`: vLLM time-to-first-token and token generation time.
-- `gateway_queue_depth`: Buffered depth for STT and MT pipelines.
+# 2. Run simulation suite
+python -m eval.agent.run_suite --variant v2_graph --n 20
+
+# 3. Compare variants with statistical confidence intervals
+python -m eval.agent.compare
+
+# 4. Cryptographically verify the append-only audit trail
+python -m app.verify_audit --log-file audit.jsonl
+```
+
+---
+
+## 6. Streaming Voice Translation Pipeline (Also Supported)
+
+The infrastructure also supports real-time Japanese ↔ English streaming speech-to-text and machine translation with continuous batching via vLLM:
+
+- Switch mode via web UI or run Gateway with `GATEWAY_MODE=translate npm run dev`.
+- Uses `LocalAgreement-n` stabilization to minimize caption flicker.
+- Full details available in [services/mt/README.md](services/mt/README.md) and [services/stt/README.md](services/stt/README.md).
+
+---
+
+## 7. Repository Layout & Key Documentation
+
+```text
+.
+├── docs/
+│   ├── agent_architecture.md    # LangGraph state machine, fast/slow path, state schema
+│   ├── failure_modes.md         # 3 documented failure modes with root cause and fix
+│   ├── decisions.md             # Key architectural decisions and trade-offs
+│   ├── demo_script.md           # 2-3 minute video walkthrough recording script
+│   ├── results.md               # Statistical analysis of champion vs challenger
+│   └── japanese_review.md       # Native speaker checklist & keigo guidelines
+├── packages/
+│   └── protocol/                # Shared TypeScript wire specs & Python Pydantic models
+├── client/                      # React frontend, Web Audio playback queue, latency HUD
+├── gateway/                     # WebSocket gateway, backpressure router, barge-in coordinator
+├── services/
+│   ├── agent/                   # LangGraph voice agent, compliance guard, audit trail, CLI
+│   ├── stt/                     # faster-whisper ASR + Silero VAD segmenter
+│   ├── tts/                     # Streaming neural TTS (16kHz PCM frames)
+│   └── mt/                      # vLLM continuous batching translation engine (frozen)
+├── eval/
+│   └── agent/                   # 10 debtor personas, noise injector, judge, comparison tools
+└── tools/
+    └── replay.py                # Real-time audio replay tool for reproducible testing
+```
+
+---
+
+## 8. License
+
+Apache 2.0 / MIT. Synthetic training and evaluation data generated for demonstration purposes.

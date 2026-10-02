@@ -18,6 +18,8 @@ export class SessionManager {
   private seq = 0;
   private gatewayUrl: string;
   private callbacks: SessionCallbacks;
+  private activeSources: AudioBufferSourceNode[] = [];
+  private nextPlayTime = 0;
 
   constructor(gatewayUrl: string, callbacks: SessionCallbacks) {
     this.gatewayUrl = gatewayUrl;
@@ -29,7 +31,7 @@ export class SessionManager {
     this.callbacks.onStateChange(state);
   }
 
-  async start(srcLang = 'ja', tgtLang = 'en'): Promise<void> {
+  async start(srcLang = 'ja', tgtLang = 'en', mode: 'translate' | 'agent' = 'agent'): Promise<void> {
     if (this.state !== 'idle') return;
 
     this.setState('connecting');
@@ -44,6 +46,7 @@ export class SessionManager {
         this.ws?.send(
           JSON.stringify({
             type: 'start',
+            mode,
             srcLang,
             tgtLang,
             sampleRate: 16000,
@@ -57,6 +60,12 @@ export class SessionManager {
         try {
           if (typeof event.data === 'string') {
             const msg = JSON.parse(event.data) as GatewayMessage;
+            if (msg.type === 'agent_audio_chunk') {
+              this.playPcm16Chunk(msg.pcm16Base64);
+            } else if (msg.type === 'interrupt') {
+              console.log('[Client] Barge-in interrupt received; flushing audio queue.');
+              this.flushPlaybackQueue();
+            }
             this.callbacks.onMessage(msg);
           }
         } catch (e) {
@@ -91,6 +100,10 @@ export class SessionManager {
     });
 
     this.audioContext = new AudioContext({ sampleRate: 16000 });
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume();
+    }
+
     const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
     const workletUrl = URL.createObjectURL(blob);
     await this.audioContext.audioWorklet.addModule(workletUrl);
@@ -110,7 +123,62 @@ export class SessionManager {
     source.connect(this.workletNode);
   }
 
+  private playPcm16Chunk(base64: string): void {
+    if (!this.audioContext) return;
+    try {
+      const binary = atob(base64);
+      const len = binary.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const int16 = new Int16Array(bytes.buffer);
+      const float32 = new Float32Array(int16.length);
+      for (let i = 0; i < int16.length; i++) {
+        float32[i] = int16[i] / 32768.0;
+      }
+
+      const audioBuffer = this.audioContext.createBuffer(1, float32.length, 16000);
+      audioBuffer.getChannelData(0).set(float32);
+
+      const source = this.audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(this.audioContext.destination);
+
+      const now = this.audioContext.currentTime;
+      if (this.nextPlayTime < now) {
+        this.nextPlayTime = now;
+      }
+
+      source.start(this.nextPlayTime);
+      this.nextPlayTime += audioBuffer.duration;
+
+      this.activeSources.push(source);
+      source.onended = () => {
+        const idx = this.activeSources.indexOf(source);
+        if (idx !== -1) {
+          this.activeSources.splice(idx, 1);
+        }
+      };
+    } catch (err) {
+      console.error('[SessionManager] Error decoding audio chunk:', err);
+    }
+  }
+
+  public flushPlaybackQueue(): void {
+    for (const src of this.activeSources) {
+      try {
+        src.stop();
+        src.disconnect();
+      } catch {}
+    }
+    this.activeSources = [];
+    this.nextPlayTime = 0;
+  }
+
   stop(): void {
+    this.flushPlaybackQueue();
+
     if (this.ws) {
       if (this.ws.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify({ type: 'stop' }));

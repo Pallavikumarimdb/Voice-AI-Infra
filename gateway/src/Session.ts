@@ -15,6 +15,9 @@ export interface Session {
   createdAt: number;
   lastActivityAt: number;
   isStarted: boolean;
+  isAgentSpeaking: boolean;
+  currentSpeakingUttId?: number;
+  currentTTSAbort?: AbortController;
 }
 
 export class SessionManager {
@@ -34,6 +37,7 @@ export class SessionManager {
       createdAt: Date.now(),
       lastActivityAt: Date.now(),
       isStarted: false,
+      isAgentSpeaking: false,
     };
     this.sessions.set(id, session);
     return session;
