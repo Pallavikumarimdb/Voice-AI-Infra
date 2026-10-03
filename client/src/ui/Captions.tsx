@@ -1,10 +1,14 @@
 import React from 'react';
+import { Badge } from './primitives.tsx';
 
 export interface CaptionEntry {
   uttId: number;
   partialText?: string;
   finalText?: string;
   translation?: string;
+  agentText?: string;
+  agentNode?: string;
+  interrupted?: boolean;
 }
 
 interface CaptionsProps {
@@ -13,48 +17,40 @@ interface CaptionsProps {
 
 export const Captions: React.FC<CaptionsProps> = ({ entries }) => {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {entries.map((entry) => (
-        // Keyed by uttId so React diffs the text node rather than remounting the DOM node
-        <div
-          key={entry.uttId}
-          style={{
-            background: 'rgba(255, 255, 255, 0.03)',
-            borderRadius: '8px',
-            padding: '12px 16px',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-          }}
-        >
-          <div style={{ fontSize: '0.8rem', color: '#8b949e', marginBottom: '4px' }}>
-            Utterance #{entry.uttId}
+        <div key={entry.uttId} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', background: '#fff' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span className="mono" style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700 }}>TURN {entry.uttId}</span>
+            {entry.interrupted && <Badge tone="danger">Barge-in</Badge>}
           </div>
 
-          {/* Original Speech (Final or Partial) */}
-          <div style={{ fontSize: '1.15rem', lineHeight: '1.5' }}>
-            {entry.finalText ? (
-              <span style={{ color: '#f0f6fc' }}>{entry.finalText}</span>
-            ) : (
-              <span style={{ color: '#8b949e', fontStyle: 'italic' }}>
-                {entry.partialText || '...'}
-              </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ borderLeft: '2px solid var(--border-strong)', paddingLeft: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-tertiary)' }}>Caller</div>
+              <div style={{ fontSize: 14, fontStyle: entry.finalText ? 'normal' : 'italic', color: entry.finalText ? 'var(--text)' : 'var(--text-tertiary)' }}>
+                {entry.finalText || entry.partialText || 'Listening…'}
+              </div>
+            </div>
+
+            {entry.translation && (
+              <div style={{ marginLeft: 10, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13 }}>
+                {entry.translation}
+              </div>
+            )}
+
+            {entry.agentText && (
+              <div style={{ borderLeft: '2px solid var(--accent-border)', paddingLeft: 10 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent)' }}>Agent</span>
+                  {entry.agentNode && <span className="mono" style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{entry.agentNode}</span>}
+                </div>
+                <div style={{ fontSize: 14, color: entry.interrupted ? 'var(--text-tertiary)' : 'var(--text)', textDecoration: entry.interrupted ? 'line-through' : 'none' }}>
+                  {entry.agentText}
+                </div>
+              </div>
             )}
           </div>
-
-          {/* Committed Translation */}
-          {entry.translation && (
-            <div
-              style={{
-                marginTop: '8px',
-                paddingTop: '8px',
-                borderTop: '1px dashed rgba(255, 255, 255, 0.1)',
-                color: '#58a6ff',
-                fontSize: '1.05rem',
-                fontWeight: 500,
-              }}
-            >
-              ↳ {entry.translation}
-            </div>
-          )}
         </div>
       ))}
     </div>

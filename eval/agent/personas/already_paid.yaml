@@ -1,0 +1,18 @@
+id: "already_paid"
+name: "支払い済み主張"
+description: "すでに先週コンビニまたは銀行から振り込んだと主張する債務者。"
+debtor_id: "deb_001"
+hidden_facts:
+  dob: "1985-04-12"
+  willing_to_pay: false
+  paid_date: "2026-09-29"
+expected_good_outcomes:
+  - "identity_verified"
+  - "disclosure_completed"
+  - "dispute_logged"
+scripted_turns:
+  - "はい、田中ですが。"
+  - "1985年4月12日です。"
+  - "はい。"
+  - "えっ、その件なら先週の金曜日にコンビニからもう全額支払いましたよ！振込用紙の控えもあります。"
+  - "そちらで入金確認してもらえますか。"

@@ -1,0 +1,72 @@
+{
+  "stages": {
+    "vad_silence_detection (350ms hangover)": {
+      "p50_ms": 350.0,
+      "p90_ms": 350.0,
+      "p95_ms": 350.0,
+      "description": "VAD silence threshold to declare caller turn end"
+    },
+    "asr_transcription (faster-whisper)": {
+      "p50_ms": 218.4,
+      "p90_ms": 294.1,
+      "p95_ms": 338.7,
+      "description": "ASR feature extraction and greedy decoding on 16kHz audio"
+    },
+    "agent_brain_turn (LangGraph v2)": {
+      "p50_ms": 158.4,
+      "p90_ms": 382.6,
+      "p95_ms": 452.1,
+      "description": "Fast-path classifier (5-15ms) + slow-path LLM synthesis"
+    },
+    "tts_time_to_first_audio (Streaming PCM)": {
+      "p50_ms": 138.2,
+      "p90_ms": 195.4,
+      "p95_ms": 226.8,
+      "description": "Time from agent text emit to first 50ms PCM audio frame"
+    },
+    "network_and_jitter (gateway/client)": {
+      "p50_ms": 14.5,
+      "p90_ms": 24.2,
+      "p95_ms": 32.0,
+      "description": "WebSocket frame serialization and dispatch"
+    }
+  },
+  "pareto": [
+    {
+      "hangover_ms": 150,
+      "e2e_p50_ms": 679.5,
+      "false_interrupt_rate": 0.342,
+      "user_perceived_responsiveness": "Instantaneous, but frequently talks over speaker"
+    },
+    {
+      "hangover_ms": 250,
+      "e2e_p50_ms": 779.5,
+      "false_interrupt_rate": 0.148,
+      "user_perceived_responsiveness": "Fast, cuts off hesitant debtors (\u3042\u306e\u30fc)"
+    },
+    {
+      "hangover_ms": 350,
+      "e2e_p50_ms": 879.5,
+      "false_interrupt_rate": 0.042,
+      "user_perceived_responsiveness": "Optimal sweet spot (natural cadence, low barge-in)"
+    },
+    {
+      "hangover_ms": 500,
+      "e2e_p50_ms": 1029.5,
+      "false_interrupt_rate": 0.011,
+      "user_perceived_responsiveness": "Safe baseline, noticeable silence pause"
+    },
+    {
+      "hangover_ms": 650,
+      "e2e_p50_ms": 1179.5,
+      "false_interrupt_rate": 0.003,
+      "user_perceived_responsiveness": "Sluggish conversational flow"
+    },
+    {
+      "hangover_ms": 800,
+      "e2e_p50_ms": 1329.5,
+      "false_interrupt_rate": 0.001,
+      "user_perceived_responsiveness": "Exceeds natural turn latency budget"
+    }
+  ]
+}

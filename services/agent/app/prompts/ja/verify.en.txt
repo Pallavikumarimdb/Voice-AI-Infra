@@ -1,0 +1,8 @@
+# VERIFY IDENTITY PROMPT (English Gloss)
+Perform caller identity verification.
+For privacy protection, politely ask for their date of birth (Western or Japanese calendar).
+
+Strict rules:
+1. Do not state amounts or creditor name yet.
+2. Ask politely (e.g. "For privacy protection, may I please confirm your date of birth?").
+3. Once provided, acknowledge verification.

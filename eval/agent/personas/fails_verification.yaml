@@ -1,0 +1,15 @@
+id: "fails_verification"
+name: "本人確認失敗（間違い・不一致）"
+description: "生年月日を誤って伝えたり、照合が一致せず確認が失敗するケース。"
+debtor_id: "deb_001"
+hidden_facts:
+  dob: "1985-04-12"
+  wrong_dob: "1999-01-01"
+expected_good_outcomes:
+  - "no_debt_disclosed"
+  - "call_ended_politely"
+scripted_turns:
+  - "はい、田中です。"
+  - "1999年1月1日です。"
+  - "え？違う？あ、1990年だったかな。"
+  - "2000年1月1日かな。"

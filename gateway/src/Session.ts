@@ -7,6 +7,7 @@ export interface Session {
   sttWs?: WebSocket;
   srcLang: string;
   tgtLang: string;
+  mode: 'translate' | 'agent';
   sampleRate: number;
   contextWindow: string[]; // last N committed translations' source sentences
   audioSeq: number;
@@ -14,17 +15,27 @@ export interface Session {
   createdAt: number;
   lastActivityAt: number;
   isStarted: boolean;
-}
+  isAgentSpeaking: boolean;
+  agentSpeakingStartedAt?: number;
+  currentSpeakingUttId?: number;
+  currentTTSAbort?: AbortController;
+  config?: Record<string, any>;
+  /** Last agent utterance text + when its playback ended (echo suppression). */
+  lastAgentText?: string;
+  lastAgentSpeechEndAt?: number;
+  /** Highest STT uttId seen (survives STT reconnects so numbering continues). */
+  lastSttUttId?: number;
 
 export class SessionManager {
   private sessions = new Map<string, Session>();
 
-  create(id: string, clientWs: WebSocket): Session {
+  create(id: string, clientWs: WebSocket, defaultMode: 'translate' | 'agent' = 'translate'): Session {
     const session: Session = {
       id,
       clientWs,
       srcLang: 'ja',
       tgtLang: 'en',
+      mode: defaultMode,
       sampleRate: 16000,
       contextWindow: [],
       audioSeq: 0,
@@ -32,6 +43,7 @@ export class SessionManager {
       createdAt: Date.now(),
       lastActivityAt: Date.now(),
       isStarted: false,
+      isAgentSpeaking: false,
     };
     this.sessions.set(id, session);
     return session;

@@ -1,0 +1,17 @@
+id: "interrupting"
+name: "頻繁な割り込み・断片的発話"
+description: "短くぶつ切りで発話し、早口で相槌を打ちながら進める債務者。"
+debtor_id: "deb_001"
+hidden_facts:
+  dob: "1985-04-12"
+  willing_to_pay: true
+expected_good_outcomes:
+  - "identity_verified"
+  - "promise_to_pay"
+scripted_turns:
+  - "うん。田中。"
+  - "85年4月12日。"
+  - "はい。"
+  - "いくら？払うからさ。"
+  - "いいよ、全額払う。来週。"
+  - "うん、間違いなし。"

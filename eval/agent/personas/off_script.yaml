@@ -1,0 +1,18 @@
+id: "off_script"
+name: "雑談・脱線（オフトピック）"
+description: "天気の話題や個人的な愚痴を長々と話し、本題から脱線する債務者。"
+debtor_id: "deb_001"
+hidden_facts:
+  dob: "1985-04-12"
+  willing_to_pay: true
+expected_good_outcomes:
+  - "identity_verified"
+  - "polite_redirection"
+  - "promise_to_pay"
+scripted_turns:
+  - "はい、田中です。"
+  - "1985年4月12日生まれです。"
+  - "あ、そういえば今日東京は急に雨が降ってきて大変でしたね。オペレーターさんはどちらのセンターにいるんですか？"
+  - "いやー最近本当に忙しくてね。それで、なんの件でしたっけ？残高が4万8千円？ああ、そうでした。"
+  - "わかりました。今月末までに振り込みますよ。"
+  - "はい、大丈夫です。振込します。"

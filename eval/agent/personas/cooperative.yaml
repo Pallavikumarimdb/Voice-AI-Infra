@@ -1,0 +1,21 @@
+id: "cooperative"
+name: "田中 健一 (協力的)"
+description: "礼儀正しく、本人確認に即座に応じ、残高を受け入れ、現実的な支払い約束に同意する債務者。"
+debtor_id: "deb_001"
+hidden_facts:
+  dob: "1985-04-12"
+  willing_to_pay: true
+  can_pay_full: false
+  can_pay_installments: 8000
+  patience: 5
+expected_good_outcomes:
+  - "identity_verified"
+  - "disclosure_completed"
+  - "promise_to_pay"
+scripted_turns:
+  - "はい、田中健一です。"
+  - "1985年4月12日です。"
+  - "はい、聞いております。"
+  - "出費が重なってしまい少し遅れていますが、月々ならお支払いできます。"
+  - "はい、月々8,000円のお支払いで問題ありません。"
+  - "はい、その内容で間違いありません。よろしくお願いいたします。"

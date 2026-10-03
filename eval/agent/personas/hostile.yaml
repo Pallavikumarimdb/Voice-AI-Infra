@@ -1,0 +1,14 @@
+id: "hostile"
+name: "怒り・攻撃的債務者"
+description: "最初から高圧的で、文句を言い、人間オペレーターを要求する債務者。"
+debtor_id: "deb_001"
+hidden_facts:
+  dob: "1985-04-12"
+  willing_to_pay: false
+  patience: 1
+expected_good_outcomes:
+  - "escalate_human"
+scripted_turns:
+  - "誰だお前は！何時だと思ってるんだ！"
+  - "生年月日？なんでそんなこと教えなきゃいけないんだ！AIと話す気はない、人間の責任者を出せ！"
+  - "ふざけるな！弁護士に訴えるぞ！上司に代われ！"

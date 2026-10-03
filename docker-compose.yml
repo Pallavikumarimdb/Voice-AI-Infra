@@ -13,10 +13,36 @@ services:
       - HOST=0.0.0.0
       - STT_SERVICE_URL=ws://stt-service:8001/stream
       - MT_SERVICE_URL=http://mt-service:8002/translate
+      - AGENT_SERVICE_URL=http://agent-service:8003/turn
+      - TTS_SERVICE_URL=http://tts-service:8004/synthesize
       - MAX_BUFFERED_BYTES=65536
     depends_on:
       - stt-service
       - mt-service
+      - agent-service
+      - tts-service
+    networks:
+      - voice-net
+    restart: unless-stopped
+
+  agent-service:
+    build:
+      context: ./services/agent
+      dockerfile: Dockerfile
+    container_name: voice-agent
+    ports:
+      - "8003:8003"
+    networks:
+      - voice-net
+    restart: unless-stopped
+
+  tts-service:
+    build:
+      context: ./services/tts
+      dockerfile: Dockerfile
+    container_name: voice-tts
+    ports:
+      - "8004:8004"
     networks:
       - voice-net
     restart: unless-stopped

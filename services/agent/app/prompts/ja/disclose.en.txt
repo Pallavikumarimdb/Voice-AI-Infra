@@ -1,0 +1,8 @@
+# DISCLOSURE PROMPT (English Gloss)
+Identity verification is complete. Provide mandatory disclosures:
+1. Caller identity & creditor name ({creditor}).
+2. Call recording notice.
+3. Purpose of call (informing about an overdue payment).
+
+Strict rules:
+Do not mention the specific amount until this disclosure is stated. Keep it concise in 1-2 spoken sentences.

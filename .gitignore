@@ -37,6 +37,9 @@ eval/results/*.json
 logs/
 *.log
 *.sqlite
+services/agent/audit_logs/
+services/agent/.llm_cache/
+*.mp3
 
 # Environment & OS
 .env
@@ -45,3 +48,6 @@ logs/
 Thumbs.db
 .vscode/
 .idea/
+
+plan.md
+UI_BUILD_PLAN.md

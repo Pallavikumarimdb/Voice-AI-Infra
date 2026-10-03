@@ -2,7 +2,7 @@ import { WebSocket } from 'ws';
 import { Session } from './Session';
 import { metrics } from './metrics';
 
-const MAX_BUFFERED_BYTES = parseInt(process.env.MAX_BUFFERED_BYTES || '65536', 10);
+const MAX_BUFFERED_BYTES = parseInt(process.env.MAX_BUFFERED_BYTES || '262144', 10);
 
 /**
  * Drop-oldest backpressure policy:
@@ -12,6 +12,7 @@ const MAX_BUFFERED_BYTES = parseInt(process.env.MAX_BUFFERED_BYTES || '65536', 1
  */
 export function forwardAudioFrame(session: Session, frame: Buffer): boolean {
   if (!session.sttWs || session.sttWs.readyState !== WebSocket.OPEN) {
+    session.audioChannelDepth = 0;
     return false;
   }
 

@@ -1,0 +1,35 @@
+name: Agent CI & Evaluation Smoke Suite
+
+on:
+  push:
+    branches: [ main, feat/agent ]
+  pull_request:
+    branches: [ main, feat/agent ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pytest pytest-asyncio pydantic fastapi httpx pyyaml tzdata langgraph prometheus_client
+
+      - name: Run Protocol Sync & Agent Unit Tests
+        run: |
+          pytest packages/protocol/tests/
+          pytest services/agent/tests/
+
+      - name: Run Deterministic Smoke Evaluation Suite
+        run: |
+          python -m eval.agent.run_suite --variant v2_graph --n 2 --personas cooperative third_party stop_contact
+          python -m eval.agent.compare

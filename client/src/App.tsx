@@ -1,238 +1,174 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { SessionManager, SessionState } from './session/SessionManager';
-import { GatewayMessage } from '@voice/protocol';
-import { Captions, CaptionEntry } from './ui/Captions';
-import { LatencyHUD } from './ui/LatencyHUD';
+import React, { useState, useEffect } from 'react';
+import { Navbar, Topbar, ActiveTab } from './ui/Navbar.tsx';
+import { LiveCallPanel } from './ui/LiveCallPanel.tsx';
+import { CallList } from './ui/CallList.tsx';
+import { CallInspector } from './ui/CallInspector.tsx';
+import { ResultsViewer } from './ui/ResultsViewer.tsx';
+import { LabelingScreen } from './ui/LabelingScreen.tsx';
+import { TranslatePanel } from './ui/TranslatePanel.tsx';
+import { apiClient } from './data/apiClient.ts';
+import { CallSummaryItem, CallDetail } from './data/types.ts';
 
 export const App: React.FC = () => {
-  const [state, setState] = useState<SessionState>('idle');
-  const [srcLang, setSrcLang] = useState('ja');
-  const [tgtLang, setTgtLang] = useState('en');
-  const [entries, setEntries] = useState<CaptionEntry[]>([]);
-  const [hudData, setHudData] = useState({ queueDepth: 0, gpuUtil: 0, rtf: 0.35 });
-  const [asrCommitMs, setAsrCommitMs] = useState<number | undefined>();
-  const [mtDurationMs, setMtDurationMs] = useState<number | undefined>();
-  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ActiveTab>('live');
+  const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
+  const [activeCallDetail, setActiveCallDetail] = useState<CallDetail | null>(null);
+  const [calls, setCalls] = useState<CallSummaryItem[]>([]);
+  const [loadingCalls, setLoadingCalls] = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [callsError, setCallsError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [apiOnline, setApiOnline] = useState(true);
 
-  const sessionManagerRef = useRef<SessionManager | null>(null);
-
+  // Sync state from current URL
   useEffect(() => {
-    const gatewayProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const gatewayHost = window.location.hostname || 'localhost';
-    const gatewayUrl = `${gatewayProtocol}//${gatewayHost}:8443/session`;
+    function parseRoute() {
+      const path = window.location.pathname;
+      if (path.startsWith('/calls/')) {
+        const id = path.replace('/calls/', '').trim();
+        setActiveTab('calls');
+        setSelectedCallId(id);
+      } else if (path === '/calls') {
+        setActiveTab('calls');
+        setSelectedCallId(null);
+      } else if (path === '/results') {
+        setActiveTab('results');
+        setSelectedCallId(null);
+      } else if (path === '/label') {
+        setActiveTab('label');
+        setSelectedCallId(null);
+      } else if (path === '/translate') {
+        setActiveTab('translate');
+        setSelectedCallId(null);
+      } else {
+        setActiveTab('live');
+        setSelectedCallId(null);
+      }
+    }
 
-    sessionManagerRef.current = new SessionManager(gatewayUrl, {
-      onStateChange: (newState) => setState(newState),
-      onError: (err) => setError(err),
-      onMessage: (msg: GatewayMessage) => {
-        if (msg.type === 'hud') {
-          setHudData({
-            queueDepth: msg.queueDepth,
-            gpuUtil: msg.gpuUtil,
-            rtf: msg.rtf,
-          });
-        } else if (msg.type === 'partial') {
-          setEntries((prev) => {
-            const index = prev.findIndex((e) => e.uttId === msg.uttId);
-            if (index >= 0) {
-              const updated = [...prev];
-              updated[index] = { ...updated[index], partialText: msg.text };
-              return updated;
-            } else {
-              return [...prev, { uttId: msg.uttId, partialText: msg.text }];
-            }
-          });
-        } else if (msg.type === 'final') {
-          if (msg.tCapture && msg.tFinal) {
-            setAsrCommitMs(msg.tFinal - msg.tCapture);
-          }
-          setEntries((prev) => {
-            const index = prev.findIndex((e) => e.uttId === msg.uttId);
-            if (index >= 0) {
-              const updated = [...prev];
-              updated[index] = { ...updated[index], finalText: msg.text, partialText: undefined };
-              return updated;
-            } else {
-              return [...prev, { uttId: msg.uttId, finalText: msg.text }];
-            }
-          });
-        } else if (msg.type === 'translated') {
-          if (msg.ttftMs && msg.decodeMs) {
-            setMtDurationMs(Math.round(msg.ttftMs + msg.decodeMs));
-          }
-          setEntries((prev) => {
-            const index = prev.findIndex((e) => e.uttId === msg.uttId);
-            if (index >= 0) {
-              const updated = [...prev];
-              updated[index] = { ...updated[index], translation: msg.translation };
-              return updated;
-            } else {
-              return [...prev, { uttId: msg.uttId, translation: msg.translation }];
-            }
-          });
-        } else if (msg.type === 'error') {
-          console.warn('[App] Gateway error:', msg.code);
-        }
-      },
-    });
-
-    return () => {
-      sessionManagerRef.current?.stop();
-    };
+    parseRoute();
+    window.addEventListener('popstate', parseRoute);
+    return () => window.removeEventListener('popstate', parseRoute);
   }, []);
 
-  const handleToggle = () => {
-    if (state === 'idle') {
-      setError(null);
-      sessionManagerRef.current?.start(srcLang, tgtLang);
-    } else {
-      sessionManagerRef.current?.stop();
+  // Update URL history when navigation occurs
+  const navigateTo = (tab: ActiveTab, callId?: string | null) => {
+    setActiveTab(tab);
+    setSelectedCallId(callId || null);
+
+    let targetPath = `/${tab}`;
+    if (tab === 'calls' && callId) {
+      targetPath = `/calls/${encodeURIComponent(callId)}`;
+    }
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState({}, '', targetPath);
     }
   };
 
+  // Load calls list
+  useEffect(() => {
+    async function fetchCalls() {
+      setLoadingCalls(true);
+      setCallsError(null);
+      try {
+        setCalls(await apiClient.getCalls());
+        setApiOnline(true);
+      } catch (err: any) {
+        setCallsError(err?.message || 'Failed to load calls.');
+        setApiOnline(false);
+      } finally {
+        setLoadingCalls(false);
+      }
+    }
+    fetchCalls();
+  }, []);
+
+  // Load detail when selectedCallId changes
+  useEffect(() => {
+    async function fetchDetail() {
+      if (!selectedCallId) {
+        setActiveCallDetail(null);
+        setDetailError(null);
+        return;
+      }
+      setLoadingDetail(true);
+      setDetailError(null);
+      try {
+        setActiveCallDetail(await apiClient.getCallDetail(selectedCallId));
+      } catch (err: any) {
+        setActiveCallDetail(null);
+        setDetailError(err?.message || 'Failed to load call record.');
+        console.error('Failed to load call detail:', err);
+      } finally {
+        setLoadingDetail(false);
+      }
+    }
+    fetchDetail();
+  }, [selectedCallId]);
+
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 16px' }}>
-      <header style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '1.6rem', fontWeight: 600, color: '#f0f6fc', margin: 0 }}>
-          Streaming Voice Translation Pipeline
-        </h1>
-        <p style={{ color: '#8b949e', margin: '8px 0 0 0', fontSize: '0.95rem' }}>
-          Real-time low-latency ASR (faster-whisper) + GPU MT (vLLM AsyncLLMEngine)
-        </p>
-      </header>
+    <div className="shell">
+      {/* Sidebar */}
+      <Navbar
+        activeTab={activeTab}
+        onSelectTab={(tab) => navigateTo(tab, null)}
+        apiOnline={apiOnline}
+      />
 
-      {/* Control Bar */}
-      <div
-        style={{
-          display: 'flex',
-          gap: '16px',
-          alignItems: 'center',
-          marginBottom: '20px',
-          padding: '16px',
-          background: '#161b22',
-          borderRadius: '8px',
-          border: '1px solid #30363d',
-        }}
-      >
-        <button
-          onClick={handleToggle}
-          style={{
-            background: state === 'streaming' ? '#da3633' : '#238636',
-            color: '#fff',
-            border: 'none',
-            padding: '10px 24px',
-            borderRadius: '6px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontSize: '1rem',
-          }}
-        >
-          {state === 'streaming'
-            ? 'Stop Recording'
-            : state === 'connecting'
-            ? 'Connecting...'
-            : 'Start Speaking'}
-        </button>
-
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <label style={{ fontSize: '0.85rem', color: '#8b949e' }}>Source:</label>
-          <select
-            value={srcLang}
-            onChange={(e) => setSrcLang(e.target.value)}
-            disabled={state !== 'idle'}
-            style={{
-              background: '#0d1117',
-              color: '#c9d1d9',
-              border: '1px solid #30363d',
-              padding: '6px 12px',
-              borderRadius: '4px',
-            }}
-          >
-            <option value="ja">Japanese (日本語)</option>
-            <option value="en">English</option>
-          </select>
-
-          <label style={{ fontSize: '0.85rem', color: '#8b949e', marginLeft: '12px' }}>
-            Target:
-          </label>
-          <select
-            value={tgtLang}
-            onChange={(e) => setTgtLang(e.target.value)}
-            disabled={state !== 'idle'}
-            style={{
-              background: '#0d1117',
-              color: '#c9d1d9',
-              border: '1px solid #30363d',
-              padding: '6px 12px',
-              borderRadius: '4px',
-            }}
-          >
-            <option value="en">English</option>
-            <option value="ja">Japanese (日本語)</option>
-          </select>
-        </div>
-
-        <div style={{ marginLeft: 'auto', fontSize: '0.9rem' }}>
-          Status:{' '}
-          <span
-            style={{
-              fontWeight: 'bold',
-              color:
-                state === 'streaming'
-                  ? '#3fb950'
-                  : state === 'connecting'
-                  ? '#d29922'
-                  : '#8b949e',
-            }}
-          >
-            {state.toUpperCase()}
-          </span>
-        </div>
-      </div>
-
-      {/* Latency HUD */}
-      <div style={{ marginBottom: '24px' }}>
-        <LatencyHUD
-          queueDepth={hudData.queueDepth}
-          gpuUtil={hudData.gpuUtil}
-          rtf={hudData.rtf}
-          lastCaptureToFinalMs={asrCommitMs}
-          lastMtDurationMs={mtDurationMs}
-        />
-      </div>
-
-      {error && (
-        <div
-          style={{
-            padding: '12px',
-            marginBottom: '16px',
-            background: 'rgba(248, 81, 73, 0.1)',
-            border: '1px solid #f85149',
-            borderRadius: '6px',
-            color: '#ff7b72',
-            fontSize: '0.9rem',
-          }}
-        >
-          {error}
-        </div>
-      )}
-
-      {/* Captions Display */}
-      <div
-        style={{
-          minHeight: '320px',
-          background: '#0d1117',
-          border: '1px solid #30363d',
-          borderRadius: '8px',
-        }}
-      >
-        {entries.length === 0 ? (
-          <div style={{ padding: '32px', textAlign: 'center', color: '#484f58' }}>
-            Click &quot;Start Speaking&quot; to begin streaming audio. Partial captions and commit translations will appear here in real-time.
-          </div>
-        ) : (
-          <Captions entries={entries} />
+      <div className="main-col">
+        <Topbar activeTab={activeTab} apiOnline={apiOnline} onHome={() => navigateTo('live', null)} onSelectTab={(tab) => navigateTo(tab, null)} />
+        {/* Main View Router */}
+        <main style={{ flex: 1, minWidth: 0 }}>
+        {activeTab === 'live' && (
+          <LiveCallPanel onInspectCall={(id) => navigateTo('calls', id)} />
         )}
+
+        {activeTab === 'calls' && !selectedCallId && (
+          <CallList
+            calls={calls}
+            onSelectCall={(id) => navigateTo('calls', id)}
+            loading={loadingCalls}
+            error={callsError}
+          />
+        )}
+
+        {activeTab === 'calls' && selectedCallId && (
+          loadingDetail ? (
+            <div className="page"><div className="card card-pad" style={{ textAlign: 'center', color: 'var(--text-tertiary)' }}>
+              Loading call record…
+            </div></div>
+          ) : activeCallDetail ? (
+            <CallInspector
+              call={activeCallDetail}
+              onBack={() => navigateTo('calls', null)}
+            />
+          ) : (
+            <div className="page"><div className="card card-pad" style={{ textAlign: 'center' }}>
+              <div>{detailError || 'Call record not found.'}</div>
+              <button className="btn" style={{ marginTop: 12 }} onClick={() => navigateTo('calls', null)}>
+                Back to list
+              </button>
+            </div></div>
+          )
+        )}
+
+        {activeTab === 'results' && (
+          <ResultsViewer
+            onSelectVariantFilter={(_variant) => {
+              navigateTo('calls', null);
+            }}
+            onNavigateToLabeling={() => navigateTo('label', null)}
+          />
+        )}
+
+        {activeTab === 'label' && (
+          <LabelingScreen onInspectCall={(id) => navigateTo('calls', id)} />
+        )}
+
+        {activeTab === 'translate' && (
+          <TranslatePanel />
+        )}
+        </main>
       </div>
     </div>
   );

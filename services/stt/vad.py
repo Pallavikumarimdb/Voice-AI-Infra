@@ -11,16 +11,27 @@ class SileroVADWrapper:
 
     def _load_model(self):
         try:
-            # Attempt to load Silero VAD from torch hub
+            # First try the installed silero_vad package
+            from silero_vad import load_silero_vad
+            self.model = load_silero_vad()
+            self.model.eval()
+            print("[VAD] Silero VAD package loaded successfully.")
+            return
+        except Exception:
+            pass
+
+        try:
+            # Attempt to load Silero VAD from torch hub with trust_repo=True
             model, _ = torch.hub.load(
                 repo_or_dir='snakers4/silero-vad',
                 model='silero_vad',
                 force_reload=False,
-                onnx=False
+                onnx=False,
+                trust_repo=True
             )
             self.model = model
             self.model.eval()
-            print("[VAD] Silero VAD loaded successfully.")
+            print("[VAD] Silero VAD loaded successfully via torch.hub.")
         except Exception as e:
             print(f"[VAD] Notice: Silero VAD hub loading failed or offline ({e}). Using energy-based fallback.")
             self.model = None

@@ -1,11 +1,11 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 app = FastAPI(title="Voice Diarization Service (Optional)", version="0.1.0")
 
 class DiarizeRequest(BaseModel):
-    sessionId: str
-    audioPath: str
+    sessionId: str = Field(..., pattern=r"^[a-zA-Z0-9_\-]{1,128}$")
+    audioPath: str = Field(..., max_length=256, pattern=r"^[a-zA-Z0-9_\-./\\]+$")
 
 @app.post("/diarize")
 async def diarize(req: DiarizeRequest):

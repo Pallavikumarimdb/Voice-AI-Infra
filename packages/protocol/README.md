@@ -46,14 +46,19 @@ Audio frames are transmitted as raw binary ArrayBuffers over WebSocket rather th
 ### 3.1 Control Signals
 - **`StartControlMessage` (`client -> gateway`)**:
   ```typescript
-  { type: "start", srcLang: "ja", tgtLang: "en", sampleRate: 16000 }
+  {
+    type: "start", mode: "agent", srcLang: "en", tgtLang: "en", sampleRate: 16000,
+    config: { domain: "collections", language: "en", greeting: "...", instructions: "...",
+              guardrails: [...], llm: { provider: "local", model: "qwen3:1.7b" }, context: {...} }
+  }
   ```
+  `llm.provider` is one of `template | local | openai`; the gateway allowlists it before forwarding.
 - **`StopControlMessage` (`client -> gateway`)**:
   ```typescript
   { type: "stop" }
   ```
 
-### 3.2 Streaming Telemetry & Transcripts
+### 3.2 Streaming Telemetry, Transcripts & Agent Turns
 - **`PartialMessage` (`gateway -> client`)**:
   Represents in-progress, speculative transcription. `stableChars` indicates how many characters have been locked by the LocalAgreement stabilizer.
   ```typescript
@@ -68,7 +73,7 @@ Audio frames are transmitted as raw binary ArrayBuffers over WebSocket rather th
   }
   ```
 - **`FinalMessage` (`gateway -> client`)**:
-  Emitted when speech activity ends or a segment cut occurs. Includes word-level timestamps.
+  Emitted when speech activity ends or a segment cut occurs. Includes word-level timestamps. `echo: true` marks speaker echo (displayed, never acted on).
   ```typescript
   {
     type: "final",
@@ -91,16 +96,20 @@ Audio frames are transmitted as raw binary ArrayBuffers over WebSocket rather th
     tTranslated: 1700000001150
   }
   ```
+- **Agent turn messages (`gateway -> client`, agent mode)**: `agent_text` (reply + behavior `events` + real model `metrics`), `agent_audio_chunk` (`pcm16Base64` playback frames), `agent_speech_start` / `agent_speech_end`, and `interrupt` (barge-in cutoff with `reason`).
+- **`StatusMessage` (`gateway -> client`)**: pipeline signals carrying no transcript content, e.g. `{ type: "status", status: "stt_reconnecting" }` / `"stt_restored"`.
+- **`ErrorMessage` (`gateway -> client`)**: honest failures, e.g. `{ type: "error", code: "MT_UNAVAILABLE" }` or `"STT_UNAVAILABLE"`.
 - **`HUDMessage` (`gateway -> client`)**:
   Emitted every 1000ms to drive the frontend real-time latency HUD.
   ```typescript
   {
     type: "hud",
-    queueDepth: 1024,   // Gateway downstream buffer in bytes
-    gpuUtil: 68,         // GPU utilization percentage
-    rtf: 0.32            // Real-Time Factor (< 1.0 is real-time)
+    queueDepth: 1024, // Gateway downstream buffer in bytes (0 when the STT leg is down)
+    gpuUtil: null,     // No GPU exporter wired up: null renders as "—", never a guess
+    rtf: null          // No RTF probe wired up: null renders as "—", never a guess
   }
   ```
+- **Brain contracts (`gateway <-> agent service`)**: `BrainRequest` (`sessionId, uttId, text, tCaptureMs, config, context`) and `BrainResponse` (`text, events: BrainEvent[], metrics: BrainMetrics`), plus `AgentConfig` carrying the `llm: { provider: 'template' | 'local' | 'openai', model }` brain selection.
 
 ---
 

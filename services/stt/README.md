@@ -92,7 +92,9 @@ LCP(Run 2, Run 3) = "すみません、駅は"
 ```
 
 - **Upstream**: Accepts a persistent WebSocket connection from the **Gateway** for each client session.
-- **Downstream**: Emits `partial` and `final` JSON messages back to the Gateway. The Gateway forwards `partial` directly to the client, and automatically routes `final` to the MT service.
+- **Downstream**: Emits `partial` and `final` JSON messages back to the Gateway. The Gateway forwards `partial` directly to the client, and routes `final` to the Agent Brain (agent mode) or the MT service (translate mode).
+- **Speech-Scoped Segments**: The segmenter returns only audio from speech start (plus preroll), never the whole session buffer — keeping CPU inference bounded and starving Whisper hallucinations of dead air.
+- **Silence-Gated Partials**: Partial inference runs only while speech is (or was very recently) active; long-silence buffers are dropped instead of transcribed.
 - **Metrics**: Scraped by Prometheus on `http://:8001/metrics`.
 
 ---
@@ -109,3 +111,6 @@ LCP(Run 2, Run 3) = "すみません、駅は"
 | `LOCAL_AGREEMENT_N`| `2` | Number of consecutive runs required to lock text |
 | `MIN_CHUNK_MS` | `500` | Inference cadence for streaming partials (ms) |
 | `VAD_THRESHOLD` | `0.5` | Speech confidence probability threshold |
+| `HANGOVER_MS` | `500` | Silence duration that finalizes a speech segment |
+| `PREROLL_MS` | `200` | Audio retained before speech onset |
+| `MAX_LEN_MS` | `18000` | Forced segment cut length |
