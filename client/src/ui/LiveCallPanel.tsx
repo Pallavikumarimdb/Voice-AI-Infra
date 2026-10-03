@@ -102,6 +102,17 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
   const [agentLanguage, setAgentLanguage] = useState<AgentLanguage>('ja');
   const [activeDomain, setActiveDomain] = useState<DomainType>('collections');
   const [showSettings, setShowSettings] = useState(false);
+
+  type BrainProvider = 'template' | 'local' | 'openai';
+  const BRAIN_DEFAULT_MODEL: Record<BrainProvider, string> = { template: '', local: 'qwen3:1.7b', openai: 'gpt-4o-mini' };
+  const [brainProvider, setBrainProvider] = useState<BrainProvider>(() => {
+    const saved = localStorage.getItem('voicebench.brain.provider');
+    return saved === 'local' || saved === 'openai' ? saved : 'template';
+  });
+  const [brainModel, setBrainModel] = useState(() => localStorage.getItem('voicebench.brain.model') || 'qwen3:1.7b');
+  const [brainModelUsed, setBrainModelUsed] = useState<string | null>(null);
+  // Best-effort Ollama reachability (browser-side probe; unknown until checked).
+  const [ollamaOk, setOllamaOk] = useState<boolean | null>(null);
   const [customGreeting, setCustomGreeting] = useState(DOMAIN_PRESETS.ja.collections.greeting);
   const [customInstructions, setCustomInstructions] = useState(DOMAIN_PRESETS.ja.collections.instructions);
   const [targetContext, setTargetContext] = useState(DOMAIN_PRESETS.ja.collections.contextDesc);
@@ -144,6 +155,26 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
   useEffect(() => {
     if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
   }, [entries]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 2500);
+    fetch('http://localhost:11434/api/tags', { signal: ctrl.signal })
+      .then((r) => { if (!cancelled) setOllamaOk(r.ok); })
+      .catch(() => { if (!cancelled) setOllamaOk(false); })
+      .finally(() => clearTimeout(timer));
+    return () => { cancelled = true; };
+  }, []);
+
+  const selectBrain = (p: BrainProvider) => {
+    setBrainProvider(p);
+    localStorage.setItem('voicebench.brain.provider', p);
+    if (p !== 'template' && !brainModel.trim()) {
+      setBrainModel(BRAIN_DEFAULT_MODEL[p]);
+      localStorage.setItem('voicebench.brain.model', BRAIN_DEFAULT_MODEL[p]);
+    }
+  };
 
   const formatDuration = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -222,6 +253,7 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
             setAgentTurnLatencyMs(msg.metrics.llmMs);
             agentTurnLatencyMsRef.current = msg.metrics.llmMs;
           }
+          if (msg.metrics?.model) setBrainModelUsed(msg.metrics.model);
           if (msg.events) {
             for (const ev of msg.events) {
               const timeStr = new Date().toLocaleTimeString();
@@ -282,6 +314,7 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
     if (state === 'idle') {
       setError(null);
       setNotice(null);
+      setBrainModelUsed(null);
       setLastCompletedSessionId(null);
       setIdentityVerified(false);
       setStopContact(false);
@@ -294,6 +327,7 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
       const agentConfig: AgentConfig = {
         domain: activeDomain, language: agentLanguage,
         instructions: customInstructions, greeting: customGreeting, guardrails: activeGuardrails,
+        llm: { provider: brainProvider, model: brainModel.trim() || BRAIN_DEFAULT_MODEL[brainProvider] },
         context: { targetSubject, contextDesc: targetContext, candidateName: targetSubject, customerName: targetSubject, debtorName: targetSubject }
       };
       sessionManagerRef.current?.start(agentLanguage, agentLanguage, 'agent', agentConfig);
@@ -305,6 +339,10 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
 
   const currentPreset = DOMAIN_PRESETS[agentLanguage][activeDomain];
   const statusTone = state === 'streaming' ? 'success' : state === 'connecting' ? 'warning' : 'neutral';
+  // Effective brain actually used (from turn metrics); falls back to selection pre-call.
+  const brainLabel = brainModelUsed
+    ? (brainModelUsed.startsWith('template') ? 'Template' : brainModelUsed.replace(/^(local|openai):/, ''))
+    : brainProvider === 'template' ? 'Template' : (brainModel.trim() || BRAIN_DEFAULT_MODEL[brainProvider]);
 
   const steps: { title: string; state: 'done' | 'active' | 'pending' }[] =
     activeDomain === 'collections'
@@ -338,6 +376,9 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
           <>
             <Badge tone={statusTone} dot>
               {state === 'streaming' ? `Live · ${formatDuration(callSeconds)}` : state === 'connecting' ? 'Connecting' : 'Standby'}
+            </Badge>
+            <Badge tone="neutral" dot={state === 'streaming'} title="Conversation brain actually in effect">
+              Brain: {brainLabel}
             </Badge>
             {lastCompletedSessionId && (
               <button className="btn btn-sm" onClick={() => onInspectCall(lastCompletedSessionId)}>Inspect last call</button>
@@ -411,6 +452,56 @@ export const LiveCallPanel: React.FC<LiveCallPanelProps> = ({ onInspectCall }) =
           <div>
             <label style={{ fontSize: 12, fontWeight: 650, color: 'var(--text-secondary)' }}>System instructions</label>
             <textarea className="input" value={customInstructions} onChange={(e) => setCustomInstructions(e.target.value)} disabled={state !== 'idle'} rows={3} style={{ width: '100%', marginTop: 4, boxSizing: 'border-box', resize: 'vertical' }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 650, color: 'var(--text-secondary)' }}>Conversation brain</label>
+            <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+              {([
+                { id: 'template', label: 'Template', hint: 'Offline scripts' },
+                { id: 'local', label: 'Local Qwen', hint: 'Free · Ollama' },
+                { id: 'openai', label: 'OpenAI', hint: 'Paid API' },
+              ] as { id: BrainProvider; label: string; hint: string }[]).map((b) => {
+                const selected = brainProvider === b.id;
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() => selectBrain(b.id)}
+                    disabled={state !== 'idle'}
+                    title={b.hint}
+                    style={{
+                      padding: '6px 12px', borderRadius: 8, fontSize: 12.5, fontWeight: 650,
+                      border: selected ? '1px solid #101828' : '1px solid var(--border-strong)',
+                      background: selected ? '#101828' : '#fff',
+                      color: selected ? '#fff' : 'var(--text-secondary)',
+                      cursor: state === 'idle' ? 'pointer' : 'not-allowed',
+                    }}
+                  >
+                    {b.label}
+                    {b.id === 'local' && ollamaOk !== null && (
+                      <span style={{ marginLeft: 6, color: ollamaOk ? '#a6f4c5' : '#fecdca' }}>●</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {brainProvider !== 'template' && (
+              <input
+                className="input"
+                value={brainModel}
+                onChange={(e) => { setBrainModel(e.target.value); localStorage.setItem('voicebench.brain.model', e.target.value); }}
+                disabled={state !== 'idle'}
+                placeholder={BRAIN_DEFAULT_MODEL[brainProvider]}
+                title="Model id passed to the provider"
+                style={{ width: '100%', marginTop: 6, boxSizing: 'border-box' }}
+              />
+            )}
+            <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 4 }}>
+              {brainProvider === 'template' && 'Deterministic scripts. Always works, no model needed.'}
+              {brainProvider === 'local' && (ollamaOk === false
+                ? 'Ollama not reachable at localhost:11434 — run `ollama run qwen3:1.7b` first. Calls fall back to templates.'
+                : 'LLM restyles replies within guardrails; templates still decide. Falls back to templates on failure.')}
+              {brainProvider === 'openai' && 'Needs OPENAI_API_KEY on the agent service. Falls back to templates on failure.'}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {activeGuardrails.map((g) => <Badge key={g} tone="success">{g}</Badge>)}

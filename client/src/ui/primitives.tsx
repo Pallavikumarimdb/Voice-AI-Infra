@@ -4,8 +4,9 @@ export const Badge: React.FC<{
   tone?: 'neutral' | 'success' | 'danger' | 'warning' | 'info';
   children: React.ReactNode;
   dot?: boolean;
-}> = ({ tone = 'neutral', children, dot }) => (
-  <span className={`badge badge-${tone}`}>
+  title?: string;
+}> = ({ tone = 'neutral', children, dot, title }) => (
+  <span className={`badge badge-${tone}`} title={title}>
     {dot && <span className="dot" />}
     {children}
   </span>

@@ -194,12 +194,14 @@ CSV format used to capture human collector labels to measure judge agreement:
 
 ## 6. Summary Comparison Table (`eval/agent/results/summary.csv`)
 
-Tabular comparison of champion vs challenger across evaluation runs:
+Tabular comparison of champion vs challenger across evaluation runs.
+Quoted cells carry Wilson 95% CIs — parse the leading number only.
+The file has **no** final-violations or cost columns: the UI aggregates
+final violations from per-run `hard_fail.num_final` records and renders
+cost as unavailable.
 
 ```csv
-Variant,Total Calls,Hard-Fail Final (%),Attempted Violations,Final Violations,Promise Rate (%),Avg Judge Score,Latency p50 (ms),Latency p95 (ms),Cost / 1k Calls ($)
-v1_baseline,20,20.0,4,4,20.0,3.65,392.4,561.2,3.42
-v2_graph,20,0.0,0,0,30.0,4.70,158.4,452.1,1.86
-v1_no_guard,20,55.0,11,11,15.0,2.15,388.1,554.0,3.38
-v2_graph_no_slow_path,20,0.0,0,0,10.0,2.85,18.2,24.5,0.00
+variant,sample_size,final_hard_fail_pct,attempted_violations,promise_rate_pct,judge_mean_score,latency_p50_ms,latency_p95_ms
+v1_baseline,50,"60.0% [46.2%, 72.4%]",35,"50.0% [36.6%, 63.4%]","3.98 [3.7, 4.22]",1.0ms,19.5ms
+v2_graph,50,"50.0% [36.6%, 63.4%]",35,"30.0% [19.1%, 43.8%]","4.18 [3.99, 4.36]",0.4ms,2.1ms
 ```

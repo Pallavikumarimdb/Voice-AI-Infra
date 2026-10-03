@@ -1,91 +1,86 @@
-# Evaluation Harness (`eval/`)
+# Agent Evaluation Harness (`eval/agent/`)
 
-An offline, reproducible evaluation framework implementing **pure-function metric contracts**, automated ablation parameter sweeps, and Pareto frontier reporting for speech-to-text and machine translation.
+Offline, reproducible evaluation of the voice agent: persona-driven call simulation, hard-fail compliance checks, LLM-as-judge rubric scoring, and human-label agreement — with results consumed directly by the Voicebench Results viewer and Call Inspector.
 
 ---
 
 ## 1. What This Component Does
 
-- **Pure-Function Metric Evaluation**: Evaluates pipeline logs without side effects, file mutations, or network calls.
-- **Ablation Sweeps**: Runs combinatorial sweeps across chunk sizes (`250ms`, `500ms`, `1000ms`, `2000ms`), stabilizer agreement thresholds (`N=1, 2, 3`), and model sizes (`small`, `large-v3-turbo`).
-- **Streaming Quality Metrics**: Measures **flicker rate** (character reversals / total length), **time-to-first-partial**, and **finalization latency**.
-- **Accuracy Benchmarks**: Calculates **Character Error Rate (CER)** for Japanese and **Word Error Rate (WER)** for English, as well as **chrF** and **BLEU** for translation.
-- **Pareto Chart Generation**: Plots latency vs stability trade-offs to determine optimal production configurations.
+- **Persona Simulation**: 10 caller personas (`personas/*.yaml`: cooperative, hostile, evasive, hardship, already_paid, third_party, stop_contact, off_script, interrupting, fails_verification) drive scripted multi-turn calls against agent variants.
+- **Champion / Challenger Runs**: `run_suite.py --variant {v1_baseline,v1_no_guard,v2_graph,v2_graph_no_slow_path} --n 5` (calls per persona) and writes `results/runs_<variant>.json` (per-call hard-fail records, judge scores, promise outcomes, latencies).
+- **Hard-Fail Checks**: `checks/hard_fail.py` flags compliance violations (e.g. pre-verification disclosure) on attempted and final agent text.
+- **LLM-as-Judge**: `judge/judge.py` scores each call against `judge/rubric.yaml` (6 criteria, 1–5) with justifications.
+- **Summary Tables**: `compare.py` aggregates `results/summary.csv` (variant, sample size, hard-fail %, violations, promise %, judge mean, p50/p95) plus `summary.md`.
+- **Latency & Turn-Taking Analysis**: `measure_latency_and_pareto.py` produces `latency_breakdown.md`, `latency_pareto.json`, and `pareto_turn_taking.md` (silence-hangover tradeoff; 350 ms is the evaluated optimum).
+- **Human Validation**: `labeling/template.csv` feeds the UI Labeling screen; `labeling/agreement.py` measures judge-vs-human agreement.
 
 ---
 
 ## 2. Directory Layout & Architecture
 
 ```
-eval/
-├── configs/
-│   └── streaming_ablation.yaml   # Parameter sweep configuration
-├── datasets/
-│   └── covost2_ja_en_sample.jsonl# Evaluation dataset with references
-├── metrics/
-│   ├── asr.py                    # CER & WER calculation with text normalizers
-│   ├── streaming.py              # Flicker rate, first partial, and finalize latency
-│   ├── mt.py                     # chrF, BLEU, TTFT, and decode duration
-│   ├── serving.py                # Throughput (tokens/sec) and serving latency
-│   └── diar.py                   # Diarization Error Rate (DER)
-├── runner.py                     # CLI parameter sweep runner
-├── report.py                     # Pareto frontier chart generator
-└── results/                      # Committed CSV and PNG benchmark artifacts
+eval/agent/
+├── run_suite.py              # Batch simulation runner (--variant, --n, --persona)
+├── simulator.py              # Persona-driven turn loop against the agent
+├── compare.py                # Aggregates runs into results/summary.csv + summary.md
+├── measure_latency_and_pareto.py  # Latency breakdown + hangover Pareto analysis
+├── noise.py                  # Channel/noise conditions for robustness runs
+├── checks/
+│   └── hard_fail.py          # Compliance violation detectors (attempted + final)
+├── judge/
+│   ├── judge.py              # LLM-as-judge scorer
+│   └── rubric.yaml           # 6-criterion scoring rubric
+├── personas/
+│   └── *.yaml                # 10 caller personas (profile + hidden situation + script)
+├── labeling/
+│   ├── template.csv          # Human-label task list (consumed by the UI)
+│   ├── label_cli.py          # Terminal labeling helper
+│   └── agreement.py          # Judge-vs-human agreement metrics
+└── results/
+    ├── summary.csv           # Per-variant aggregates (quoted fields with 95% CIs)
+    ├── summary.md            # Human-readable summary
+    ├── runs_<variant>.json   # Per-call records (source of truth for the UI)
+    ├── latency_pareto.json   # Hangover vs interruption tradeoff data
+    ├── latency_breakdown.md  # Stage-by-stage p50/p90/p95
+    └── pareto_turn_taking.md # Pareto table with the 350 ms recommendation
 ```
 
-### 2.1 The Pure-Function Contract
-Every metric function follows an identical, stateless contract:
-```python
-def compute(log: list[dict], reference: Any = None) -> dict[str, float]:
-    ...
-```
-- No metric touches the filesystem, disk, or network.
-- Input: Array of structured event dictionaries (identical to what the Gateway, STT, and MT services emit).
-- Output: Dictionary of float metrics (e.g. `{"streaming.flicker_rate": 0.041, "asr.cer": 0.072}`).
-
-### 2.2 Flicker Rate Metric Formula
-Flicker measures how much text was retroactively erased/backtracked between consecutive partial hypotheses:
-$$\text{Flicker Rate} = \frac{\sum \text{Erased Characters}}{\sum \text{Hypothesis Length}}$$
-A high flicker rate forces the human eye to re-read sentences as they morph, causing cognitive strain.
+Every number the Results viewer shows parses straight from these files —
+`summary.csv` columns map 1:1 (quoted CI cells included); final-violation
+totals aggregate per-run `hard_fail.num_final` records. Nothing is derived
+in the browser.
 
 ---
 
 ## 3. How It Connects to Other Components
 
 ```
-      [ Live Pipeline Services ]
-      Gateway, STT, and MT Services
-                   │
-                   │ Emits structured JSONL logs:
-                   │ {"sessionId":"s_1", "stage":"asr_partial", "tCapture":..., "text":"..."}
-                   │ {"sessionId":"s_1", "stage":"asr_final", "tCapture":..., "text":"..."}
-                   │ {"sessionId":"s_1", "stage":"mt_translated", "ttftMs":84, ...}
-                   ▼
-      ┌────────────────────────────────────────────────────────┐
-      │                   EVAL HARNESS                         │
-      │                                                        │
-      │   1. Replays event logs or synthetic sweep runs        │
-      │   2. Feeds events into pure-function metrics/          │
-      │   3. Outputs results/streaming_ablation.csv            │
-      │   4. report.py generates results/pareto_chart.png      │
-      └────────────────────────────────────────────────────────┘
+  [ Agent Service ]            [ Voicebench UI ]
+  services/agent/app  ──sim──► │ /results (summary tables, Pareto)
+  (graph/baseline/   ──audit─► │ /calls/:id (turn timelines, guard diffs)
+   generalized)      ──labels► │ /label (blind rubric ratings → template.csv)
 ```
 
-The eval harness can run:
-1. **Offline on recorded JSONL logs**: Directly assessing real production sessions recorded during live calls.
-2. **As an ablation sweep runner (`runner.py`)**: Testing simulated combinations of chunk sizes and agreement thresholds against test datasets before deploying models to production.
+- The gateway data API reads `results/`, `personas/`, and `labeling/` directly — the UI never embeds eval numbers.
+- Live call audit logs (`services/agent/audit_logs/`) share the same JSONL schema, so real calls inspect exactly like simulated ones.
 
 ---
 
 ## 4. Usage Commands
 
 ```bash
-# 1. Install evaluation dependencies
-pip install -r requirements.txt
+# 1. Agent unit, compliance, and red-team tests
+pytest services/agent/tests/
 
-# 2. Run the ablation sweep
-python runner.py --sweep configs/streaming_ablation.yaml
+# 2. Execute a simulation batch (5 calls per persona × 10 personas = 50 per variant)
+python -m eval.agent.run_suite --variant v2_graph --n 5
 
-# 3. Generate the Pareto Frontier chart
-python report.py --input results/streaming_ablation.csv --output results/pareto_chart.png
+# 3. Aggregate comparative metrics
+python -m eval.agent.compare
+
+# 4. Latency breakdown + Pareto analysis
+python -m eval.agent.measure_latency_and_pareto
+
+# 5. Cryptographically verify an audit trail
+python -m app.verify_audit --log-file audit.jsonl
 ```

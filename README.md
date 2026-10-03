@@ -1,4 +1,4 @@
-# 🎙️ VoiceAI Infra: Generalized Regulated Voice Agent Platform & Streaming Engine
+# 🎙️ Voicebench: Regulated Voice Agent Platform & Streaming Engine
 
 <div align="center">
 
@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-blue?logo=python)](https://www.python.org/)
 [![Monorepo](https://img.shields.io/badge/Build-Turborepo-ef4444?logo=turborepo)](https://turbo.build/)
 [![Latency SLA](https://img.shields.io/badge/E2E%20Latency-879ms%20(p50)-emerald)](eval/agent/results/latency_breakdown.md)
-[![Compliance](https://img.shields.io/badge/Hard--Fail%20Rate-0.0%25-brightgreen)](docs/results.md)
+[![Compliance](https://img.shields.io/badge/Hard--Fail%20Rate-50.0%25-orange)](eval/agent/results/summary.csv)
 [![Audit](https://img.shields.io/badge/Audit%20Log-SHA--256%20Chained-indigo)](docs/ui_data_formats.md)
 
 **An ultra-low latency (<880ms p50), enterprise voice infrastructure and multi-purpose regulated agent platform. Easily configured across Debt Collections (`債権回収`), Candidate Screening (`採用選考`), Customer KYC (`本人確認`), and Custom Voice Workflows via in-UI prompt and guardrail controls.**
@@ -150,18 +150,18 @@ Caller Utterance ──► [Pre-Turn Guard] ──► [LangGraph Fast Path]  (De
 
 ## 📊 Benchmark Results: Champion vs. Challenger
 
-Evaluated across **10 realistic debtor personas** with 20 randomized simulation runs per variant:
+Evaluated across **10 personas** with 50 simulation runs per variant (`eval/agent/results/summary.csv`):
 
-| Architecture Variant | Sample Size (n) | Hard-Fail Rate (95% CI) | Judge Score (1–5) | Latency p50 | Latency p95 | Cost / 1k Calls |
-|:---|:---:|:---:|:---:|:---:|:---:|:---:|
-| **v1 Baseline (Single-Prompt)** | 20 | 20.0% [7.0%, 45.2%] | 3.65 ± 0.38 | 392.4 ms | 561.2 ms | $3.42 |
-| **v2 LangGraph (Challenger)** | 20 | **0.0% [0.0%, 16.1%]** | **4.70 ± 0.22** | **158.4 ms** | **452.1 ms** | **$1.86** |
-| *v1 Ablation (Prompt Only, No Guard)* | 20 | 55.0% [34.2%, 74.2%] | 2.15 ± 0.44 | 388.1 ms | 554.0 ms | $3.38 |
-| *v2 Ablation (Fast Path Only, No LLM)* | 20 | 0.0% [0.0%, 16.1%] | 2.85 ± 0.35 | 18.2 ms | 24.5 ms | $0.00 |
+| Architecture Variant | Sample Size (n) | Hard-Fail Rate (95% CI) | Judge Score (1–5) | Latency p50 | Latency p95 |
+|:---|:---:|:---:|:---:|:---:|:---:|
+| **v1 Baseline** | 50 | 60.0% [46.2%, 72.4%] | 3.98 [3.7, 4.22] | 1.0 ms | 19.5 ms |
+| **v2 LangGraph (Challenger)** | 50 | **50.0% [36.6%, 63.4%]** | **4.18 [3.99, 4.36]** | **0.4 ms** | **2.1 ms** |
+| *v1 No Guard (ablation)* | 50 | 60.0% [46.2%, 72.4%] | 3.98 [3.7, 4.22] | 0.7 ms | 2.2 ms |
+| *v2 No Slow Path (ablation)* | 50 | 50.0% [36.6%, 63.4%] | 4.18 [3.99, 4.36] | 0.4 ms | 2.0 ms |
 
-* **0% Hard Breaches**: Zero unauthorized disclosures or compliance violations.
-* **59.6% Reduction in Brain Latency**: Fast-path deterministic turns slashed median brain response from 392ms down to 158ms.
-* **45.6% Operational Cost Savings**: Structured routing significantly reduces total token consumption per call.
+* **Lower hard-fail rate**: v2 cuts final hard-failures from 60% to 50% vs v1 baseline.
+* **Higher judge scores**: 3.98 → 4.18 mean score on the 6-criterion rubric.
+* **Lower turn latency**: median 1.0 ms → 0.4 ms in simulation.
 
 ---
 
@@ -176,7 +176,7 @@ Real-time audio telemetry measured from end-of-utterance to start of synthesized
 
 | Pipeline Stage | p50 (ms) | p95 (ms) | % of Total | Operational Function |
 |:---|:---:|:---:|:---:|:---|
-| **1. VAD Silence Detection** | 350.0 ms | 350.0 ms | 39.8% | Adaptive 350ms silence hangover threshold |
+| **1. VAD Silence Detection** | 350.0 ms | 350.0 ms | 39.8% | Silence hangover threshold (350 ms is the evaluated Pareto optimum; service default is 500 ms) |
 | **2. ASR Acoustic Decoding** | 218.4 ms | 338.7 ms | 24.8% | Faster-Whisper acoustic tokenization |
 | **3. Agent Decision & Guard** | 158.4 ms | 452.1 ms | 18.0% | Multi-domain classifier + deterministic guard |
 | **4. TTS Time-to-First-Audio**| 138.2 ms | 226.8 ms | 15.7% | Streaming 16kHz mono PCM synthesis |
@@ -189,11 +189,11 @@ Real-time audio telemetry measured from end-of-utterance to start of synthesized
 
 The web application includes a comprehensive control center for live testing, call inspection, and validation:
 
-* **Live Agent Studio (`/live`)**: Test voice calls across Collections, Candidate Screening, Customer KYC, and Custom Agents. Includes in-UI instruction and greeting editor, real-time state machine indicators, and sub-25ms barge-in cutoff.
-* **Deep Call Inspector (`/calls`, `/calls/:id`)**: Browse calls with multi-field filtering. Detailed vertical timeline shows caller speech, agent attempted text vs. safe override diffs, tool calls, and per-turn latency. Features an interactive **"Simulate Tamper"** button proving instant SHA-256 hash-chain invalidation.
+* **Live Agent Studio (`/live`)**: Test voice calls across Collections, Candidate Screening, Customer KYC, and Custom Agents. Includes in-UI instruction and greeting editor, a selectable conversation brain (Template / Local Qwen / OpenAI), real-time state machine indicators, and sub-25ms barge-in cutoff. The agent greets first on every call.
+* **Deep Call Inspector (`/calls`, `/calls/:id`)**: Browse calls with multi-field filtering, newest first. Detailed vertical timeline shows caller speech, agent attempted text vs. safe override diffs, tool calls, and per-turn latency. SHA-256 hash-chain integrity is verified live and displayed per call.
 * **Human Labeling Suite (`/label`)**: Blinded labeling console preventing evaluation bias. Reviewers score transcripts against a 6-criterion rubric with keyboard shortcuts (`1-5`, `Enter`, `N`).
-* **Evaluation Results Viewer (`/results`)**: Direct rendering of benchmark summary metrics, Wilson 95% confidence intervals, and the silence hangover Pareto frontier.
-* **Offline Sample Data Mode**: Runs completely standalone. If backend services are not running, the UI automatically falls back to pre-rendered evaluation datasets in `client/public/sample-data/`.
+* **Evaluation Results Viewer (`/results`)**: Direct rendering of benchmark summary metrics with Wilson 95% confidence intervals, and the silence hangover Pareto frontier. Every number comes from the result files; unavailable values render as "—", never guesses.
+* **Live data only**: The UI reads exclusively from the gateway data API. If the API is unreachable, views show explicit error states — there is no sample-data fallback.
 
 ---
 
@@ -292,9 +292,6 @@ python -m eval.agent.compare
 
 # 4. Cryptographically verify audit trail integrity
 python -m app.verify_audit --log-file audit.jsonl
-
-# 5. Export fresh evaluation runs to client sample data
-python tools/export_sample_data.py
 ```
 
 ---
@@ -324,11 +321,10 @@ Tampering with any historical turn, timestamp, or score immediately breaks all d
 
 ```text
 .
-├── client/                     # Modern React Reviewer UI, Agent Studio, AudioWorklet, HUD
-│   ├── src/ui/                 # LiveCallPanel, CallInspector, LabelingScreen, ResultsViewer
-│   ├── src/data/               # Cryptographic hash verifier, data loaders, offline client
-│   └── public/sample-data/     # Pre-rendered evaluation runs and persona datasets
-├── gateway/                    # WebSocket router, barge-in coordinator, Data REST API
+├── client/                     # Voicebench UI: live calls, inspector, labeling, results
+│   ├── src/ui/                 # LiveCallPanel, CallList, CallInspector, LabelingScreen, ResultsViewer, TranslatePanel, Navbar
+│   ├── src/data/               # Live data API client, loaders, hash-chain verifier, types
+├── gateway/                    # WebSocket router, agent/translate dispatch, barge-in, echo guard, Data REST API
 │   ├── src/routes/dataApi.ts   # Secure endpoints for calls, runs, personas, and labels
 │   └── tests/                  # Path-traversal security test suite
 ├── services/
@@ -342,9 +338,11 @@ Tampering with any historical turn, timestamp, or score immediately breaks all d
 │   └── agent/                  # 10 debtor personas, red-team harnesses, LLM-as-a-judge
 ├── docs/                       # Technical architecture, failure mode analyses, decisions
 └── tools/
-    ├── export_sample_data.py   # Synchronizes evaluation outputs with client sample data
+    ├── export_sample_data.py   # Legacy: synced eval outputs to the removed sample-data fallback (no longer consumed by the UI)
     └── replay.py               # Reproducible audio packet injector
 ```
+
+See [docs/local_llm.md](docs/local_llm.md) to run the conversation brain on a local Qwen model (Ollama) or a paid API instead of templates.
 
 ---
 

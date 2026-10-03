@@ -270,6 +270,26 @@ class GeneralizedVoiceAgent:
         handler_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
         events.extend(turn_events)
 
+        # Optional LLM phrasing layer: the model restyles the template reply
+        # within guardrails but can never change the decision (events) or add
+        # new claims. Any failure or rule breach → template reply stands.
+        llm_cfg = config.get("llm", {})
+        if not isinstance(llm_cfg, dict):
+            llm_cfg = {}
+        llm_provider = llm_cfg.get("provider", "template")
+        llm_model = llm_cfg.get("model") or None
+        metrics = {
+            "llmMs": handler_ms,
+            "ttftMs": handler_ms,
+            "tokensIn": 0,
+            "tokensOut": 0,
+            "model": f"template_{domain}_{language}",
+        }
+        if llm_provider in ("local", "openai"):
+            reply_text, metrics = self._phrase_with_llm(
+                ctx, reply_text, turn_events, llm_provider, llm_model
+            )
+
         history = state.get("messages", [])
         history.append({"role": "assistant", "content": reply_text})
         state["messages"] = history[-20:]
@@ -287,17 +307,78 @@ class GeneralizedVoiceAgent:
             "text": reply_text,
             "events": events,
             "state": state,
-            "metrics": {
-                # Template engine: no LLM call happens on this path. Report the
-                # honestly measured handler time and zero tokens — never fake
-                # LLM timings.
-                "llmMs": handler_ms,
-                "ttftMs": handler_ms,
-                "tokensIn": 0,
-                "tokensOut": 0,
-                "model": f"template_{domain}_{language}",
-            }
+            "metrics": metrics,
         }
+
+    # Claims the template did NOT make: the LLM must not introduce these.
+    _FORBIDDEN_NEW_CLAIMS = (
+        "promise to pay", "promise_to_pay", "約束", "お約束を承りました",
+        "confirmation email", "確認通知", "確認メール",
+        "identity verified", "verified your identity", "ご本人様確認が完了",
+        "account details", "balance is", "残高",
+    )
+
+    def _phrase_with_llm(
+        self,
+        ctx: TurnContext,
+        template_reply: str,
+        turn_events: List[Dict[str, Any]],
+        provider: str,
+        model: Optional[str],
+    ) -> tuple[str, Dict[str, Any]]:
+        """Restyle the template reply via LLM. Returns (reply, metrics)."""
+        from .llm import llm_client
+
+        fallback_metrics = {
+            "llmMs": 0.0,
+            "ttftMs": 0.0,
+            "tokensIn": 0,
+            "tokensOut": 0,
+            "model": f"template_{ctx.state.get('domain', 'custom')}_{ctx.language}",
+        }
+        try:
+            history = ctx.state.get("messages", [])[-6:]
+            convo = "\n".join(
+                f"{'Caller' if m.get('role') == 'user' else 'Agent'}: {m.get('content', '')}"
+                for m in history
+            )
+            stage = ctx.state.get("stage", "active")
+            system = (
+                f"You are a professional {ctx.state.get('domain', 'custom')} voice agent "
+                f"speaking {ctx.language}. Rephrase the AGENT LINE below naturally for spoken "
+                f"conversation in 1-2 short sentences. Keep every fact, amount, name, and "
+                f"commitment EXACTLY identical — add nothing new. Never claim identity "
+                f"verification, a recorded promise, a sent email, or any balance/amount "
+                f"unless present in the AGENT LINE. Conversation stage: {stage}."
+            )
+            if ctx.instructions:
+                system += f" Operator instructions: {ctx.instructions[:500]}"
+            messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": f"Conversation so far:\n{convo}\n\nAGENT LINE:\n{template_reply}"},
+            ]
+            res = llm_client.complete_with(
+                provider, messages, model=model,
+                temperature=0.3, max_tokens=120, timeout_s=8.0,
+            )
+            text = (res.get("text") or "").strip()
+            if not text or len(text) > 600:
+                return template_reply, fallback_metrics
+            lowered = text.lower()
+            template_lowered = template_reply.lower()
+            for claim in self._FORBIDDEN_NEW_CLAIMS:
+                if claim.lower() in lowered and claim.lower() not in template_lowered:
+                    return template_reply, fallback_metrics
+            return text, {
+                "llmMs": res.get("latency_ms", 0.0),
+                "ttftMs": res.get("latency_ms", 0.0),
+                "tokensIn": res.get("tokens_in", 0),
+                "tokensOut": res.get("tokens_out", 0),
+                "model": res.get("model", f"{provider}:unknown"),
+            }
+        except Exception as e:
+            print(f"[GeneralizedAgent] LLM phrasing skipped ({provider}): {e}")
+            return template_reply, fallback_metrics
 
     # ─── Screening ────────────────────────────────────────────────────────────
 

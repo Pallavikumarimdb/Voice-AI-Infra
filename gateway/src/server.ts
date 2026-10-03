@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import dotenv from 'dotenv';
 import { SessionManager, Session } from './Session';
+import { sanitizeAgentConfig } from './agentConfig';
 import { forwardAudioFrame } from './backpressure';
 import { createSTTConnection, STTMessage } from './routes/sttClient';
 import { MTClient } from './routes/mtClient';
@@ -440,17 +441,7 @@ wss.on('connection', (clientWs: WebSocket) => {
           }
           // [H4] Validate and sanitize agent config before storing — prevents prompt injection via config channel
           if (msg.config && typeof msg.config === 'object') {
-            const ALLOWED_DOMAINS = ['collections', 'screening', 'kyc', 'custom'];
-            const ALLOWED_LANGUAGES = ['ja', 'en'];
-            const MAX_STR_LEN = 4000;
-            const rawCfg = msg.config as Record<string, unknown>;
-            session.config = {
-              domain: ALLOWED_DOMAINS.includes(String(rawCfg.domain || '')) ? String(rawCfg.domain) : 'collections',
-              language: ALLOWED_LANGUAGES.includes(String(rawCfg.language || '')) ? String(rawCfg.language) : 'ja',
-              instructions: typeof rawCfg.instructions === 'string' ? rawCfg.instructions.slice(0, MAX_STR_LEN) : '',
-              greeting: typeof rawCfg.greeting === 'string' ? rawCfg.greeting.slice(0, 500) : '',
-              context: rawCfg.context && typeof rawCfg.context === 'object' ? rawCfg.context : {},
-            };
+            session.config = sanitizeAgentConfig(msg.config) as Record<string, any>;
           }
           session.isStarted = true;
           connectSTT();

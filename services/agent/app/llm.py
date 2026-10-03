@@ -42,6 +42,14 @@ def _get_cache_key(model: str, messages: List[Dict[str, str]], temperature: floa
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 class LLMClient:
+    """
+    Multi-provider LLM access.
+    - 'openai': hosted API (needs OPENAI_API_KEY). Model: AGENT_LLM_MODEL (default gpt-4o-mini).
+    - 'local': Ollama OpenAI-compatible API (no key). Base: OLLAMA_BASE_URL
+      (default http://localhost:11434/v1). Model: AGENT_LOCAL_MODEL (default qwen3:1.7b).
+    Every call measures real latency and reports real token counts.
+    Unavailable providers raise RuntimeError — callers must fall back openly.
+    """
     def __init__(
         self,
         default_model: str = "gpt-4o-mini",
@@ -59,6 +67,11 @@ class LLMClient:
         self._client = None
         self._init_openai()
 
+        self.local_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        self.local_model = os.getenv("AGENT_LOCAL_MODEL", "qwen3:1.7b")
+        self._local_client = None
+        self._probe_cache: Dict[str, Any] = {}
+
     def _init_openai(self):
         api_key = os.getenv("OPENAI_API_KEY")
         if api_key:
@@ -70,6 +83,90 @@ class LLMClient:
                 self._client = None
         else:
             self._client = None
+
+    def _local_client_or_raise(self):
+        """Ollama client (OpenAI-compatible). Raises if the package or server is missing."""
+        if self._local_client is not None:
+            return self._local_client
+        try:
+            from openai import OpenAI
+        except Exception as ex:
+            raise RuntimeError(f"openai package missing for local provider: {ex}")
+        self._local_client = OpenAI(base_url=self.local_base_url, api_key="ollama")
+        return self._local_client
+
+    def probe(self, provider: str, timeout_s: float = 2.0) -> bool:
+        """Best-effort reachability check, cached for 30s. Never raises."""
+        now = time.monotonic()
+        cached = self._probe_cache.get(provider)
+        if cached and now - cached[0] < 30:
+            return cached[1]
+        ok = False
+        try:
+            if provider == "openai":
+                ok = self._client is not None
+            elif provider == "local":
+                import urllib.request
+                req = urllib.request.Request(
+                    self.local_base_url.replace("/v1", "") + "/api/tags",
+                    method="GET",
+                )
+                with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+                    ok = resp.status == 200
+        except Exception:
+            ok = False
+        self._probe_cache[provider] = (now, ok)
+        return ok
+
+    def complete_with(
+        self,
+        provider: str,
+        messages: List[Dict[str, str]],
+        model: Optional[str] = None,
+        temperature: float = 0.2,
+        max_tokens: int = 100,
+        timeout_s: float = 8.0,
+    ) -> Dict[str, Any]:
+        """
+        Routed completion with measured latency and real token counts.
+        Raises RuntimeError when the provider is unavailable (caller falls back).
+        """
+        t_start = time.perf_counter()
+        if provider == "openai":
+            if self._client is None:
+                raise RuntimeError("OpenAI provider selected but OPENAI_API_KEY is not configured.")
+            client, target_model = self._client, model or self.default_model
+        elif provider == "local":
+            client = self._local_client_or_raise()
+            target_model = model or self.local_model
+        else:
+            raise RuntimeError(f"Unknown LLM provider '{provider}'.")
+
+        try:
+            resp = client.chat.completions.create(
+                model=target_model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=timeout_s,
+            )
+        except Exception as e:
+            raise RuntimeError(f"LLM provider '{provider}' call failed: {e}")
+
+        text = (resp.choices[0].message.content or "").strip()
+        usage = resp.usage
+        tokens_in = usage.prompt_tokens if usage else sum(len(m["content"]) for m in messages)
+        tokens_out = usage.completion_tokens if usage else len(text)
+        t_elapsed = (time.perf_counter() - t_start) * 1000
+        self.tracker.record(tokens_in, tokens_out, f"{provider}:{target_model}")
+        return {
+            "text": text,
+            "tokens_in": tokens_in,
+            "tokens_out": tokens_out,
+            "model": f"{provider}:{target_model}",
+            "latency_ms": round(t_elapsed, 2),
+            "cached": False,
+        }
 
     def complete(
         self,

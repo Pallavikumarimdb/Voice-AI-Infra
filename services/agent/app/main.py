@@ -27,6 +27,7 @@ from .handoff import generate_handoff_summary
 from .state import CallState
 from .compliance.guard import ComplianceGuard
 from .generalized import GeneralizedVoiceAgent
+from .llm import llm_client
 
 app = FastAPI(title="Voice Agent Service", version="0.1.0")
 
@@ -89,7 +90,16 @@ _reaper_thread.start()
 
 @app.get("/healthz")
 async def healthz():
-    return {"status": "ok", "service": "agent", "sessions_active": len(sessions)}
+    return {
+        "status": "ok",
+        "service": "agent",
+        "sessions_active": len(sessions),
+        "llm": {
+            "local": llm_client.probe("local"),
+            "openai": llm_client.probe("openai"),
+            "local_model": llm_client.local_model,
+        },
+    }
 
 @app.get("/metrics")
 async def metrics():

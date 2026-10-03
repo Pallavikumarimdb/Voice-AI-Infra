@@ -1,6 +1,6 @@
-# Client Service (`client/`)
+# Voicebench UI (`client/`)
 
-A high-performance browser testing harness built with **TypeScript, React, Vite, and the Web Audio API** for real-time speech capture, latency HUD telemetry, and non-flickering caption rendering.
+The **Voicebench** browser client: live voice calls with a selectable conversation brain, turn-level call inspection, blinded human labeling, and eval results — built with **TypeScript, React, Vite, and the Web Audio API**. It reads **live data only** from the gateway data API (`/api/*`, proxied by Vite in dev); unreachable API surfaces explicit error states, and label-save failures are reported, never faked.
 
 ---
 
@@ -23,12 +23,26 @@ client/src/
 │   ├── ringBuffer.ts      # Main thread buffer staging
 │   └── resample.ts        # Linear interpolation fallback resampler
 ├── session/
-│   ├── SessionManager.ts  # State machine (Idle -> Connecting -> Streaming -> Reconnecting)
+│   ├── SessionManager.ts  # State machine (idle -> connecting -> streaming -> idle) + PCM playback
 │   └── protocol.ts        # Re-export from @voice/protocol
+├── data/
+│   ├── apiClient.ts       # Live /api client (throws on failure, no fixtures)
+│   ├── loaders.ts         # Typed parsers for summary CSV, labels, personas, runs
+│   ├── hashChain.ts       # SHA-256 audit-chain verifier (TS port)
+│   └── types.ts           # Shared UI data models
 ├── ui/
-│   ├── Captions.tsx       # Stable React DOM diffing for partial/final text
-│   └── LatencyHUD.tsx     # Telemetry readout component
-├── App.tsx                # Main control bar, language picker, and state wiring
+│   ├── LiveCallPanel.tsx   # Live call: brain selector, transcript, workflow state, safety feed
+│   ├── CallList.tsx         # Filterable call browser, newest first
+│   ├── CallInspector.tsx    # Turn-by-turn timeline, guard diffs, judge, handoff
+│   ├── ResultsViewer.tsx    # Champion/challenger tables rendered from result files
+│   ├── LabelingScreen.tsx   # Blind human-rating console (writes via POST /api/labels)
+│   ├── TranslatePanel.tsx   # Realtime translation demo
+│   ├── Navbar.tsx           # Sidebar + topbar shell
+│   ├── Badges.tsx           # Status badges (unknowns render as "—")
+│   ├── Captions.tsx         # Stable React DOM diffing for partial/final text
+│   ├── LatencyHUD.tsx       # Telemetry readout (unmeasured RTF/GPU render as "—")
+│   └── primitives.tsx       # Shared Page/Card/Badge/EmptyState primitives
+├── App.tsx                # Route router (/live, /calls, /calls/:id, /results, /label, /translate)
 └── main.tsx               # Entry point
 ```
 
@@ -42,8 +56,9 @@ The audio thread acts like an interrupt service routine. Any memory allocation o
 Tracks connection lifecycle:
 - **`idle`**: Microphone and WebSocket inactive.
 - **`connecting`**: WebSocket handshaking with the Gateway (`/session`), awaiting session start ACK.
-- **`streaming`**: Media stream source connected to worklet; frames flow continuously.
-- **`reconnecting`**: Automatic retry upon unexpected network drops (creates a new session rather than attempting complex server-side resume).
+- **`streaming`**: Media stream source connected to worklet; frames flow continuously. The manager is created once per panel mount and never recreated mid-call.
+- Call start sends `{ type: 'start', mode: 'translate' | 'agent', srcLang, tgtLang, sampleRate: 16000, config }` where `config` carries domain, language, greeting, instructions, guardrails, and the selected conversation brain (`llm: { provider, model }`).
+- Reconnects are server-side (gateway re-establishes STT); the client surfaces `status` notices and keeps streaming.
 
 ### 2.3 Non-Flickering Caption Diffing (`Captions.tsx`)
 Naive streaming UI implementations cause severe visual flicker when partial hypotheses update several times a second because they remount the DOM element (`key={uttId + seq}`).
@@ -80,9 +95,15 @@ Naive streaming UI implementations cause severe visual flicker when partial hypo
      ┌────────────────────────────────────────────┘
      ▼
   { type: "partial", text: "...", stableChars: 6 }  ──► Rendered as muted italic
-  { type: "final", text: "...", words: [...] }       ──► Rendered as solid white
-  { type: "translated", translation: "..." }         ──► Rendered as blue translation
-  { type: "hud", queueDepth: 1024, rtf: 0.32 }       ──► Rendered in Latency HUD
+  { type: "final", text: "...", words: [...] }       ──► Rendered as solid text
+  { type: "translated", translation: "..." }         ──► Rendered as translation block
+  { type: "agent_text", text: "...", events, metrics } ──► Agent turn + workflow state + safety feed
+  { type: "agent_audio_chunk", pcm16Base64: "..." }   ──► Scheduled PCM playback (flushed on barge-in)
+  { type: "agent_speech_start" / "agent_speech_end" } ──► Speaking indicator + E2E latency math
+  { type: "interrupt", reason: "caller_barge_in" }    ──► Playback flush + turn flag
+  { type: "status", status: "stt_reconnecting" }      ──► Transient notice banner (call continues)
+  { type: "error", code: "MT_UNAVAILABLE" }           ──► Error banner; fatal errors stop the session
+  { type: "hud", queueDepth: 1024, gpuUtil: null, rtf: null } ──► Rendered in Latency HUD ("—" when null)
 ```
 
 - **Upstream**: Captures microphone input from user.

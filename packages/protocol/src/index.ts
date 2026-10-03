@@ -73,6 +73,11 @@ export interface AgentConfig {
   greeting?: string;
   guardrails?: string[];
   context?: Record<string, any>;
+  /** Conversation brain: scripted templates, local Ollama model, or paid API. */
+  llm?: {
+    provider?: 'template' | 'local' | 'openai';
+    model?: string;
+  };
 }
 
 export interface StartControlMessage {

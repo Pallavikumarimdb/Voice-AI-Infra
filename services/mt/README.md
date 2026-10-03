@@ -8,6 +8,7 @@ A stateless, GPU-accelerated machine translation service implemented in **Python
 
 - **Stateless HTTP Translation**: Exposes `POST /translate`, taking an utterance, source/target languages, and a rolling context window of preceding utterances.
 - **Continuous Batching with vLLM**: Batches incoming requests from all active sessions at the iteration level inside `AsyncLLMEngine`. No request waits for an in-progress sentence to finish before joining the GPU batch.
+- **Honest Unavailability**: vLLM requires a CUDA GPU. Without one, the engine refuses to start and `POST /translate` returns `503 Translation engine unavailable` — the service never fabricates translations or latency numbers. The gateway surfaces this as `MT_UNAVAILABLE`.
 - **Solving the Multiprocessing Bottleneck**: Replaces naive multi-process architectures (which spawn multiple model copies that contend for GPU VRAM and context-switch) with a single engine process that maximizes GPU tensor core utilization.
 - **Terse System Contract**: Formats prompts to enforce zero preamble, no conversational filler, and exact preservation of proper nouns and digits to minimize decode token latency.
 - **Latency Telemetry**: Tracks and records Time-To-First-Token (TTFT) and decode duration histograms on Prometheus.
@@ -19,9 +20,9 @@ A stateless, GPU-accelerated machine translation service implemented in **Python
 ```
 services/mt/
 ├── prompt.py        # System prompt formatting with 3-sentence rolling context
-├── engine.py        # AsyncLLMEngine wrapper with continuous batching & dev fallback
+├── engine.py        # AsyncLLMEngine wrapper with continuous batching (raises when no GPU; no mock)
 ├── main.py          # FastAPI HTTP endpoints (POST /translate, GET /metrics, GET /health)
-└── Dockerfile       # vLLM container runtime image
+└── Dockerfile       # vLLM container runtime image (Linux-only: vLLM has no Windows support)
 ```
 
 ### 2.1 The Terse Prompt Contract (`prompt.py`)
