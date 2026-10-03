@@ -22,7 +22,7 @@ jobs:
       - name: Install Python Dependencies
         run: |
           pip install --upgrade pip
-          pip install pytest pytest-asyncio pydantic fastapi httpx pyyaml tzdata langgraph
+          pip install pytest pytest-asyncio pydantic fastapi httpx pyyaml tzdata langgraph prometheus_client
 
       - name: Run Protocol Sync & Agent Unit Tests
         run: |
